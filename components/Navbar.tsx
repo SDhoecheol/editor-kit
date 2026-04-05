@@ -2,83 +2,98 @@
 
 import Link from "next/link";
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase'; // 수파베이스 파이프라인 가져오기
+import { supabase } from '../lib/supabase';
+import { useTheme } from "next-themes"; // 테마 훅 추가
 
 export default function Navbar() {
-  // 유저 정보 저장소
   const [user, setUser] = useState<any>(null);
+  const [nickname, setNickname] = useState<string>('');
+  
+  // 테마 스위치용 상태
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
-  // 로그인 상태 감지기
   useEffect(() => {
-    const checkUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
+    setMounted(true); // 에러 방지용 (클라이언트 마운트 확인)
+    const checkUserAndProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('nickname').eq('id', user.id).single();
+        if (profile) {
+          setNickname(profile.nickname); 
+        } else {
+          if (window.location.pathname !== '/welcome') {
+            window.location.href = '/welcome';
+          }
+        }
+      }
     };
-    checkUser();
+    checkUserAndProfile();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null);
+      if (session?.user) checkUserAndProfile();
+      else setNickname('');
     });
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
-  // 로그인 & 로그아웃 함수
   const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${location.origin}`,
-      },
-    });
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}` } });
   };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
+  const handleLogout = async () => await supabase.auth.signOut();
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    // ⭐️ 주간: 하얀 종이 / 야간: 매트한 잉크 블랙 (dark:bg-[#1A1A1A])
+    <nav className="bg-white dark:bg-[#1A1A1A] border-b border-[#E5E4E0] dark:border-[#333333] sticky top-0 z-50 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
-          {/* 로고 영역 */}
-          <div className="flex-shrink-0 flex items-center">
-            <Link href="/" className="text-xl font-bold text-blue-600">
+          <div className="flex-shrink-0 flex items-center gap-2">
+            <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-3xl">design_services</span>
+            <Link href="/" className="text-xl font-black text-[#222222] dark:text-[#F5F4F0] tracking-tight hover:text-blue-600 transition-colors">
               EditorKit
             </Link>
           </div>
           
-          {/* 메뉴 영역 */}
           <div className="flex gap-6 items-center">
-            <Link href="/community" className="text-gray-600 hover:text-blue-600 font-medium">
+            <Link href="/community" className="text-[#666666] dark:text-[#A0A0A0] hover:text-[#222222] dark:hover:text-white font-bold transition-colors">
               커뮤니티
             </Link>
-            <Link href="/tools" className="text-gray-600 hover:text-blue-600 font-medium">
+            <Link href="/tools" className="text-[#666666] dark:text-[#A0A0A0] hover:text-[#222222] dark:hover:text-white font-bold transition-colors">
               유틸리티
             </Link>
 
-            {/* ⭐️ 마법이 일어나는 부분: 로그인 상태에 따라 버튼이 바뀝니다 */}
-            {user ? (
-              <div className="flex items-center gap-3 ml-4">
-                <span className="text-sm text-gray-700">
-                  {/* 이메일 앞자리만 잘라서 보여줍니다 (예: sdhoecheol님) */}
-                  <span className="font-bold text-blue-600">{user.email?.split('@')[0]}</span> 님
+            {/* ⭐️ ☀️/🌙 테마 토글 버튼 */}
+            {mounted && (
+              <button 
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="ml-4 p-2 rounded-full bg-[#F5F4F0] dark:bg-[#121212] border border-[#E5E4E0] dark:border-[#333333] text-[#222222] dark:text-[#F5F4F0] hover:scale-110 transition-all flex items-center justify-center w-10 h-10 shadow-sm"
+                title="테마 변경"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  {theme === 'dark' ? 'light_mode' : 'dark_mode'}
                 </span>
-                <button 
-                  onClick={handleLogout} 
-                  className="text-sm px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium transition-colors border border-gray-200"
-                >
+              </button>
+            )}
+
+            {user ? (
+              <div className="flex items-center gap-4 border-l border-[#E5E4E0] dark:border-[#333333] pl-6 ml-2">
+                <div className="flex items-center gap-2 bg-[#F5F4F0] dark:bg-[#121212] px-4 py-1.5 rounded-full border border-[#E5E4E0] dark:border-[#333333]">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  <span className="text-sm font-bold text-[#222222] dark:text-[#F5F4F0]">
+                    {nickname || '로딩중...'}
+                  </span>
+                </div>
+                <button onClick={handleLogout} className="text-sm px-4 py-2 text-[#666666] dark:text-[#A0A0A0] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-bold transition-all">
                   로그아웃
                 </button>
               </div>
             ) : (
-              <button 
-                onClick={handleGoogleLogin} 
-                className="text-sm px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors ml-4"
-              >
-                구글 로그인
+              <button onClick={handleGoogleLogin} className="text-sm px-5 py-2.5 bg-[#222222] dark:bg-[#F5F4F0] text-white dark:text-[#222222] rounded-xl hover:-translate-y-0.5 font-bold transition-all ml-2 flex items-center gap-2 shadow-md">
+                <span className="material-symbols-outlined text-sm">login</span> 시작하기
               </button>
             )}
           </div>

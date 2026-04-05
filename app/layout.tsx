@@ -1,22 +1,14 @@
 import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import Navbar from "@/components/Navbar";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-// 1. 사이트 이름과 설명(메타데이터)을 에디터킷으로 수정했습니다.
 export const metadata: Metadata = {
   title: "에디터킷 - 인쇄/디자인 실무자 커뮤니티",
-  description: "2030 인쇄 및 편집 디자이너를 위한 유틸리티 및 커뮤니티",
+  description: "인쇄, 디자인 실무자들을 위한 유틸리티 및 커뮤니티 공간입니다.",
 };
 
 export default function RootLayout({
@@ -25,18 +17,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // 2. 한국어 사이트이므로 lang을 "ko"로 변경했습니다.
-    <html
-      lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
-        {/* 3. 드디어 메뉴바 부품을 화면 맨 위에 끼워 넣었습니다! */}
-        <Navbar />
-        {/* 4. 이 children이 바로 우리가 아까 만든 메인 화면(page.tsx)입니다. */}
-        <main className="flex-grow">
+    <html lang="ko" suppressHydrationWarning>
+      <head>
+        {/* ⭐️ 핵심: 구글 머티리얼 아이콘을 예쁘게 불러오는 마법의 연결선입니다! */}
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+      </head>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <Navbar />
           {children}
-        </main>
+        </ThemeProvider>
       </body>
     </html>
   );

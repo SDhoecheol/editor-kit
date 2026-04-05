@@ -1,52 +1,59 @@
-import Link from "next/link";
+import Link from 'next/link';
+
+// ⭐️ 각 툴마다 이동할 주소(link)를 추가했습니다!
+const tools = [
+  { id: 1, name: "세네카(책등) 계산기", desc: "종이 평량과 페이지 수로 정확한 책등 두께를 계산합니다.", icon: "menu_book", status: "안정", link: "/tools/seneca" },
+  { id: 2, name: "QR/바코드 제네레이터", desc: "인쇄용 고해상도(CMYK/K100) QR 및 바코드 벡터를 생성합니다.", icon: "qr_code_scanner", status: "안정", link: "/tools/barcode" },
+  { id: 3, name: "인쇄 견적 비교기", desc: "주요 인쇄소별 예상 견적과 소요 일정을 한눈에 비교합니다.", icon: "receipt_long", status: "베타", link: "/tools/estimate" },
+  { id: 4, name: "해상도/CMYK 안전 체크", desc: "이미지 업로드 시 인쇄 사고 방지를 위한 사전 검사를 진행합니다.", icon: "plumbing", status: "개발중", link: "/tools/preflight" },
+  { id: 5, name: "단축키 컨버터", desc: "포토샵, 일러스트, 인디자인 단축키를 서로 변환해 줍니다.", icon: "keyboard", status: "개발중", link: "/tools/shortcuts" },
+  { id: 6, name: "포트폴리오 3D 목업", desc: "평면 이미지를 넣으면 고화질 입체 목업 이미지로 렌더링합니다.", icon: "view_in_ar", status: "PRO", link: "/tools/mockup" },
+];
 
 export default function ToolsPage() {
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">유틸리티</h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        
-        <Link href="/tools/seneca" className="block bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
-          <svg className="w-8 h-8 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-          <h2 className="text-lg font-bold text-slate-800 mb-2">세네카 계산기</h2>
-          <p className="text-slate-500 text-xs">페이지 수와 종이 두께를 입력해 정확한 책등 두께를 계산합니다.</p>
-        </Link>
-        
-        <Link href="/tools/yieldcalc" className="block bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
-          <svg className="w-8 h-8 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-          <h2 className="text-lg font-bold text-slate-800 mb-2">16P / 낱장 계산기</h2>
-          <p className="text-slate-500 text-xs">PDF를 업로드하여 16P 접지 및 낱장 반복 인쇄 조판을 계산합니다.</p>
-        </Link>
-
-        <Link href="/tools/harikomi" className="block bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
-          <svg className="w-8 h-8 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"></path></svg>
-          <h2 className="text-lg font-bold text-slate-800 mb-2">명함 & 중철 조판기</h2>
-          <p className="text-slate-500 text-xs">명함 다건 합판 배열 및 디지털 중철(가미 삽입) 조판을 생성합니다.</p>
-        </Link>
-
-        <Link href="/tools/qrcode" className="block bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
-          <svg className="w-8 h-8 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
-          <h2 className="text-lg font-bold text-slate-800 mb-2">고화질 QR 제작기</h2>
-          <p className="text-slate-500 text-xs">로고 삽입, 색상 변경이 지원되는 인쇄용 고화질(SVG/PDF) QR을 만듭니다.</p>
-        </Link>
-
-        {/* 1단계 플립북 */}
-        <Link href="/tools/flipbook" className="block bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer">
-          <svg className="w-8 h-8 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-          <h2 className="text-lg font-bold text-slate-800 mb-2">2.5D 플립북 목업</h2>
-          <p className="text-slate-500 text-xs">내지 중심의 양면 스프레드 디자인을 책 넘기는 효과로 검수합니다.</p>
-        </Link>
-
-        {/* 🔥 2단계 완전 3D 목업 */}
-        <Link href="/tools/mockup3d" className="block bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl shadow-lg border border-slate-700 hover:border-blue-500 hover:shadow-xl transition-all cursor-pointer relative overflow-hidden group">
-          <div className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg shadow-md z-10">PRO</div>
-          <svg className="w-8 h-8 text-blue-400 mb-3 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
-          <h2 className="text-lg font-bold text-white mb-2">3D 입체 패키징 목업</h2>
-          <p className="text-slate-400 text-xs">페이지 수에 비례한 두께감이 적용된 완벽한 3D 책 모델을 빙글빙글 돌려보며 감상합니다.</p>
-        </Link>
-
+      <div className="border-b-2 border-[#222222] dark:border-[#F5F4F0] pb-6 mb-10">
+        <h1 className="text-3xl font-black text-[#222222] dark:text-[#F5F4F0] tracking-tight">유틸리티 툴</h1>
+        <p className="text-[#666666] dark:text-[#A0A0A0] text-sm mt-2">인쇄/디자인 실무의 효율을 극대화하는 에디터킷 전용 도구들입니다.</p>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tools.map((tool) => (
+          /* ⭐️ div 대신 Link를 사용하여 클릭 시 이동하도록 변경했습니다 */
+          <Link href={tool.link} key={tool.id} className="group bg-white dark:bg-[#1A1A1A] border border-[#E5E4E0] dark:border-[#333333] hover:border-[#222222] dark:hover:border-[#F5F4F0] p-6 transition-all cursor-pointer relative overflow-hidden flex flex-col h-full block">
+            
+            <div className="absolute top-6 right-6">
+              <span className={`text-[10px] font-black tracking-widest px-2 py-1 border ${
+                tool.status === '안정' ? 'border-[#E5E4E0] text-[#666666] dark:border-[#333333] dark:text-[#A0A0A0]' :
+                tool.status === '베타' ? 'border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400' :
+                tool.status === 'PRO' ? 'bg-[#222222] text-[#F5F4F0] border-[#222222] dark:bg-[#F5F4F0] dark:text-[#222222] dark:border-[#F5F4F0]' :
+                'border-dashed border-[#A0A0A0] text-[#A0A0A0]'
+              }`}>
+                {tool.status}
+              </span>
+            </div>
+
+            <span className="material-symbols-outlined text-3xl text-[#222222] dark:text-[#F5F4F0] mb-6">
+              {tool.icon}
+            </span>
+            
+            <h2 className="text-lg font-bold text-[#222222] dark:text-[#F5F4F0] mb-3 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              {tool.name}
+            </h2>
+            
+            <p className="text-sm text-[#666666] dark:text-[#A0A0A0] leading-relaxed mb-6">
+              {tool.desc}
+            </p>
+
+            <div className="mt-auto flex items-center gap-1 text-xs font-bold text-[#222222] dark:text-[#F5F4F0] opacity-0 group-hover:opacity-100 transition-opacity">
+              실행하기 <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+      
     </div>
   );
 }

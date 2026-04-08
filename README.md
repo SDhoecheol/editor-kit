@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+에디터킷(EditorKit) 기능 요구사항 정의서 (v1.0)
+1. 서비스 개요
 
-## Getting Started
+서비스명: 에디터킷 (EditorKit)
 
-First, run the development server:
+목적: 인쇄 및 디자인 실무자를 위한 전문 유틸리티 도구 제공 및 정보 공유 커뮤니티.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+2. 공통 및 회원 기능 (Account & Common)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+인증 (OAuth): Supabase 연동을 통한 구글(Google) 소셜 로그인 및 로그아웃 지원.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+온보딩 (명함 프로필):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+최초 로그인 시 직군(디자인, 인쇄/제작, 기타) 태그 최대 5개 선택 및 한 줄 소개 입력.
 
-## Learn More
+실무자 공감대(Meme)를 활용한 형용사+명사 조합의 '랜덤 닉네임 자동 생성기' 제공.
 
-To learn more about Next.js, take a look at the following resources:
+입력 정보 기반의 '에디토리얼 명함 스타일' 프로필 실시간 프리뷰 시각화.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+시스템 설정: 사용자 환경에 맞춘 라이트/다크 모드(Theme) 토글 전환 지원.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. 커뮤니티 기능 (Community)
 
-## Deploy on Vercel
+게시판 카테고리: 공지사항, 자유게시판, 익명게시판, 고민상담, 포토폴리오, Q&A, 자료실 등 총 7개 분류 지원.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+메인 대시보드: 핵심 4개 게시판(공지, 자유, 포트폴리오, Q&A)의 최신 글 목록을 그리드 형태로 미리보기 제공.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+목록 UI: 높은 정보 밀도를 가진 한국형 리스트 레이아웃, 카테고리 필터링, 검색 바 및 페이징 시스템 뷰 제공.
+
+4. 실무 유틸리티 기능 (Utilities - 6대 핵심 툴)
+
+4.1. 세네카(책등) 계산기
+
+스노우, 아트, 모조, 랑데뷰, 몽블랑, 아르떼 등 주요 지류 지원.
+
+평량 및 페이지 수 입력 시, 종이별 캘리퍼(실측 두께) 기반의 정확한 책등 두께 산출.
+
+4.2. 하리꼬미(터잡기) 조판기
+
+명함(단면/양면) 및 중철 제본에 대한 PDF 동적 배열 렌더링.
+
+명함 배치 옵션(독판, 2-Up, 5-Up, 10-Up 합장) 지원.
+
+재단선(Crop Marks) 및 여백 자동 생성 후 인쇄용 PDF 다운로드 기능.
+
+4.3. 종이 절수 및 수율 계산기
+
+작업물 규격(가로, 세로, 도련) 입력 시 국전지 및 4x6전지 기준 최적 안착 수량 및 수율 계산.
+
+낱장 전단 반복 배열 및 16P 무선/양장 접지용 하리꼬미 시뮬레이션 지원.
+
+필요 정매수 및 여분 포함 발주 연수(Ream) 산출.
+
+4.4. 고화질 QR/바코드 제작기
+
+텍스트/URL 기반 실시간 QR 코드 렌더링.
+
+전경/배경 색상 커스텀, 투명도 설정 및 중앙 로고 이미지 삽입 지원.
+
+오류 복원율(L~H) 수동 제어 및 웹용(JPG, PNG), 인쇄용 백터(SVG, PDF) 다중 포맷 내보내기.
+
+4.5. 3D 패키징 목업 (Pro)
+
+통표지 및 내지 PDF 파일 파싱 후 WebGL 기반 풀 3D 오브젝트로 변환.
+
+1~200mm 세네카 두께 동적 조절 및 마우스 인터랙션(360도 회전, 확대/축소, 페이지 넘김) 지원.
+
+4.6. 2.5D 플립북 목업 뷰어 (Pro)
+
+다중 페이지 내지 PDF 업로드 시, 양면 펼침면 기준의 인터랙티브 플립북 뷰어 자동 생성.
+
+마우스 드래그를 통한 물리적 페이지 넘김 애니메이션 지원.

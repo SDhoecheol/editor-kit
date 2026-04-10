@@ -1,5 +1,10 @@
+/* app/globals.css */
+
 /* 최신 v4 엔진 호출 방식입니다! */
 @import "tailwindcss";
+
+/* ⭐️ 핵심: Tailwind v4에서 다크모드 버튼(class)을 완벽하게 인식하게 만드는 마법의 한 줄! */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
@@ -16,4 +21,11 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ⭐️ 다크모드 변환 시 0.5초(500ms) 동안 서서히 색이 스며들게 하는 마법의 코드 */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
+  transition-duration: 500ms !important;
+  transition-timing-function: ease-in-out !important;
 }

@@ -1,102 +1,72 @@
-'use client';
+"use client";
 
 import Link from "next/link";
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { useTheme } from "next-themes"; // 테마 훅 추가
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 export default function Navbar() {
-  const [user, setUser] = useState<any>(null);
-  const [nickname, setNickname] = useState<string>('');
-  
-  // 테마 스위치용 상태
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  // 클라이언트 렌더링 확인 (다크모드 아이콘 깜빡임 방지)
   useEffect(() => {
-    setMounted(true); // 에러 방지용 (클라이언트 마운트 확인)
-    const checkUserAndProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-
-      if (user) {
-        const { data: profile } = await supabase.from('profiles').select('nickname').eq('id', user.id).single();
-        if (profile) {
-          setNickname(profile.nickname); 
-        } else {
-          if (window.location.pathname !== '/welcome') {
-            window.location.href = '/welcome';
-          }
-        }
-      }
-    };
-    checkUserAndProfile();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) checkUserAndProfile();
-      else setNickname('');
-    });
-
-    return () => authListener.subscription.unsubscribe();
+    setMounted(true);
   }, []);
 
-  const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${location.origin}` } });
-  };
-  const handleLogout = async () => await supabase.auth.signOut();
-
   return (
-    // ⭐️ 주간: 하얀 종이 / 야간: 매트한 잉크 블랙 (dark:bg-[#1A1A1A])
-    <nav className="bg-white dark:bg-[#1A1A1A] border-b border-[#E5E4E0] dark:border-[#333333] sticky top-0 z-50 transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
-          <div className="flex-shrink-0 flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-3xl">design_services</span>
-            <Link href="/" className="text-xl font-black text-[#222222] dark:text-[#F5F4F0] tracking-tight hover:text-blue-600 transition-colors">
-              EditorKit
-            </Link>
+    <nav className="bg-white dark:bg-[#1E1E1E] border-b-4 border-[#222222] dark:border-[#444444] sticky top-0 z-50 transition-colors duration-300">
+      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        
+        {/* ==========================================
+            로고 및 메인 메뉴
+            ========================================== */}
+        <div className="flex items-center gap-10">
+          <Link href="/" className="text-2xl font-black tracking-tighter flex items-center gap-2 text-[#222222] dark:text-[#EAEAEA]">
+            <span className="material-symbols-outlined text-[28px]">layers</span> EditorKit
+          </Link>
+          <div className="hidden md:flex items-center gap-6 font-bold text-sm">
+            <Link href="/" className="text-[#222222] dark:text-[#EAEAEA] border-b-2 border-[#222222] dark:border-[#EAEAEA] pb-1 transition-colors">홈</Link>
+            <Link href="/community" className="text-[#A0A0A0] dark:text-[#666666] hover:text-[#222222] dark:hover:text-[#EAEAEA] pb-1 border-b-2 border-transparent transition-colors">커뮤니티</Link>
+            <Link href="/tools" className="text-[#A0A0A0] dark:text-[#666666] hover:text-[#222222] dark:hover:text-[#EAEAEA] pb-1 border-b-2 border-transparent transition-colors">유틸리티</Link>
+          </div>
+        </div>
+
+        {/* ==========================================
+            우측 유저 액션 (다크모드, 재화, 버튼, 프로필)
+            ========================================== */}
+        <div className="flex items-center gap-4">
+          
+          {/* ⭐️ 전역 다크모드 토글 버튼 */}
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="w-10 h-10 flex items-center justify-center border-2 border-[#222222] dark:border-[#444444] bg-[#F5F4F0] dark:bg-[#1E1E1E] shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
+            aria-label="Toggle Dark Mode"
+          >
+            {mounted && (
+              <span className="material-symbols-outlined text-[#222222] dark:text-[#EAEAEA]">
+                {theme === "dark" ? "light_mode" : "dark_mode"}
+              </span>
+            )}
+          </button>
+
+          {/* 잉크(Ink) 표시 위젯 */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-[#F5F4F0] dark:bg-[#2A2A2A] border border-[#E5E4E0] dark:border-[#444444] px-3 py-1 font-mono text-sm font-bold transition-colors">
+            <span className="text-blue-500">💧</span> 
+            <span className="text-[#222222] dark:text-[#EAEAEA]">1,240</span>
           </div>
           
-          <div className="flex gap-6 items-center">
-            <Link href="/community" className="text-[#666666] dark:text-[#A0A0A0] hover:text-[#222222] dark:hover:text-white font-bold transition-colors">
-              커뮤니티
-            </Link>
-            <Link href="/tools" className="text-[#666666] dark:text-[#A0A0A0] hover:text-[#222222] dark:hover:text-white font-bold transition-colors">
-              유틸리티
-            </Link>
+          {/* 글쓰기 버튼 */}
+          <Link href="/community/write" className="bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-4 py-1.5 text-sm font-bold shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#444444] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_#222222] dark:hover:shadow-[1px_1px_0px_#444444] transition-all flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">edit</span> 글쓰기
+          </Link>
 
-            {/* ⭐️ ☀️/🌙 테마 토글 버튼 */}
-            {mounted && (
-              <button 
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="ml-4 p-2 rounded-full bg-[#F5F4F0] dark:bg-[#121212] border border-[#E5E4E0] dark:border-[#333333] text-[#222222] dark:text-[#F5F4F0] hover:scale-110 transition-all flex items-center justify-center w-10 h-10 shadow-sm"
-                title="테마 변경"
-              >
-                <span className="material-symbols-outlined text-[20px]">
-                  {theme === 'dark' ? 'light_mode' : 'dark_mode'}
-                </span>
-              </button>
-            )}
-
-            {user ? (
-              <div className="flex items-center gap-4 border-l border-[#E5E4E0] dark:border-[#333333] pl-6 ml-2">
-                <div className="flex items-center gap-2 bg-[#F5F4F0] dark:bg-[#121212] px-4 py-1.5 rounded-full border border-[#E5E4E0] dark:border-[#333333]">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  <span className="text-sm font-bold text-[#222222] dark:text-[#F5F4F0]">
-                    {nickname || '로딩중...'}
-                  </span>
-                </div>
-                <button onClick={handleLogout} className="text-sm px-4 py-2 text-[#666666] dark:text-[#A0A0A0] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-bold transition-all">
-                  로그아웃
-                </button>
-              </div>
-            ) : (
-              <button onClick={handleGoogleLogin} className="text-sm px-5 py-2.5 bg-[#222222] dark:bg-[#F5F4F0] text-white dark:text-[#222222] rounded-xl hover:-translate-y-0.5 font-bold transition-all ml-2 flex items-center gap-2 shadow-md">
-                <span className="material-symbols-outlined text-sm">login</span> 시작하기
-              </button>
-            )}
+          {/* 유저 프로필 아이콘 */}
+          <div className="w-8 h-8 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] flex items-center justify-center font-black cursor-pointer hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors relative">
+            <span className="text-[#222222] dark:text-[#EAEAEA]">E</span>
+            {/* 온라인 상태 뱃지 */}
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#1E1E1E] rounded-full"></span>
           </div>
+
         </div>
       </div>
     </nav>

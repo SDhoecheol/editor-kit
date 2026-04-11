@@ -10,7 +10,7 @@ const paperSizes: Record<string, { name: string; w: number; h: number }> = {
   '4x6_half': { name: '4x6반전지', w: 788, h: 545 }
 };
 
-// 16P 무선/양장 접지 하리꼬미 배열
+// 16P 무선/양장 접지 배열
 const layout16 = {
   front: [
     [ { p: 15, r: true }, { p: 0, r: true }, { p: 3, r: true }, { p: 12, r: true } ],
@@ -28,7 +28,7 @@ export default function YieldCalcPage() {
   const [bleed, setBleed] = useState<number>(3);
   const [pages, setPages] = useState<number>(1);
   const [sides, setSides] = useState<number>(2);
-  const [qty, setQty] = useState<number>(1000);
+  const [qty, setQty] = useState<number>(1000); // ⭐️ 누락되었던 수량 입력 기능 추가
   const [paperPref, setPaperPref] = useState<string>("auto");
   
   const [impositionMode, setImpositionMode] = useState<"repeat" | "signature16">("repeat");
@@ -40,7 +40,6 @@ export default function YieldCalcPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [result, setResult] = useState<any>(null);
   
-  // 뷰어 컨트롤 상태
   const [fullPdfUrl, setFullPdfUrl] = useState<string | null>(null);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -48,7 +47,6 @@ export default function YieldCalcPage() {
   const [previewSide, setPreviewSide] = useState<"front" | "back">("front");
   const [totalSheets, setTotalSheets] = useState<number>(1);
 
-  // 파일 업로드 처리
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -97,7 +95,6 @@ export default function YieldCalcPage() {
     if (fileInput) fileInput.value = '';
   };
 
-  // 연수/절수 계산 엔진
   useEffect(() => {
     if (!width || !height || !qty) return setResult(null);
 
@@ -139,7 +136,6 @@ export default function YieldCalcPage() {
 
   }, [width, height, bleed, pages, sides, qty, paperPref, impositionMode]);
 
-  // 1대(시트)를 그리는 핵심 로직
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const createSheet = async (targetDoc: PDFDocument, srcPages: any[], sheetIdx: number, side: "front" | "back") => {
     const MM_TO_PT = 2.83465;
@@ -218,7 +214,6 @@ export default function YieldCalcPage() {
     }
   };
 
-  // 사전 렌더링 (Pre-render)
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     if (!result || !fileBuffer) {
@@ -282,95 +277,127 @@ export default function YieldCalcPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, fileBuffer, impositionMode, includeCropMarks, sides, totalSheets]);
 
-  // 🌟 실무용 파일명 생성 로직
   const getDownloadFileName = () => {
-    if (!fileName) return "imposed.pdf";
-    const baseName = fileName.replace(/\.[^/.]+$/, ""); // 확장자 제거
-    const modeStr = impositionMode === "signature16" ? "16P접지" : "낱장반복";
+    if (!fileName) return "인쇄배치_결과.pdf";
+    const baseName = fileName.replace(/\.[^/.]+$/, "");
+    const modeStr = impositionMode === "signature16" ? "16P책자배치" : "반복배치";
     const sideStr = sides === 2 ? "양면" : "단면";
-    return `${baseName}_하리꼬미_${modeStr}_${sideStr}.pdf`;
+    return `${baseName}_${modeStr}_${sideStr}.pdf`;
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-12">
       
-      <h1 className="text-3xl font-bold text-slate-800 mb-8">절수 및 조판(하리꼬미) 계산기</h1>
+      {/* 헤더 영역 */}
+      <header className="border-b-4 border-[#222222] dark:border-[#444444] pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="bg-[#222222] text-[#F5F4F0] dark:bg-[#333333] dark:text-[#EAEAEA] px-2 py-0.5 text-[10px] font-black tracking-widest">
+              유틸리티 / 03
+            </span>
+            <span className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0] tracking-widest">
+              인쇄 용지 및 배치 자동 계산
+            </span>
+          </div>
+          <h1 className="text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight">
+            수율 계산기
+          </h1>
+        </div>
+      </header>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
         {/* 왼쪽 설정 패널 */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-blue-500">upload_file</span> 원본 PDF 업로드
-            </h3>
-            <div className="relative group cursor-pointer flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:border-blue-500 transition-all mb-4 overflow-hidden">
+          
+          <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] p-6 transition-colors">
+            <div className="relative group cursor-pointer flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-all mb-6">
               <input accept=".pdf" id="yc-file-input" type="file" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
               {!fileName ? (
                 <div className="text-center px-4 pointer-events-none">
-                  <span className="material-symbols-outlined text-3xl text-slate-400 mb-1">picture_as_pdf</span>
-                  <p className="text-xs font-bold text-slate-600">PDF 파일을 드래그하세요</p>
+                  <span className="material-symbols-outlined text-3xl text-[#222222] dark:text-[#EAEAEA] mb-1">upload_file</span>
+                  <p className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0]">PDF 원고를 첨부하세요</p>
                 </div>
               ) : (
                 <div className="w-full px-4 text-center z-20">
-                  <p className="text-sm font-bold text-blue-600 truncate">{fileName}</p>
-                  <button onClick={resetFile} className="mt-2 text-[11px] text-slate-400 hover:text-red-500 font-medium transition-colors bg-white px-3 py-1 rounded-full border border-slate-200">초기화</button>
+                  <p className="text-sm font-black text-[#222222] dark:text-[#EAEAEA] truncate">{fileName}</p>
+                  <button onClick={resetFile} className="mt-2 text-[11px] text-red-600 font-bold bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] px-3 py-1 hover:translate-x-[1px] hover:translate-y-[1px] transition-all shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:shadow-none">삭제 및 초기화</button>
                 </div>
               )}
             </div>
             
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">가로 (mm)</label>
-                <input type="number" value={width} onChange={(e) => setWidth(Number(e.target.value))} className="w-full px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold" />
+                <label className="block text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mb-1">가로 (mm)</label>
+                <input type="number" value={width} onChange={(e) => setWidth(Number(e.target.value))} className="w-full px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold outline-none focus:shadow-[4px_4px_0px_#222222] dark:focus:shadow-[4px_4px_0px_#111111] focus:-translate-y-1 transition-all" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">세로 (mm)</label>
-                <input type="number" value={height} onChange={(e) => setHeight(Number(e.target.value))} className="w-full px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold" />
+                <label className="block text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mb-1">세로 (mm)</label>
+                <input type="number" value={height} onChange={(e) => setHeight(Number(e.target.value))} className="w-full px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold outline-none focus:shadow-[4px_4px_0px_#222222] dark:focus:shadow-[4px_4px_0px_#111111] focus:-translate-y-1 transition-all" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-blue-500">grid_view</span> 조판 방식
-            </h3>
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              <button onClick={() => setImpositionMode("repeat")} className={`py-3 px-2 rounded-xl text-sm font-bold border-2 transition-all ${impositionMode === 'repeat' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-100 bg-white text-slate-500 hover:border-blue-200'}`}>
-                낱장 반복 (전단)
-              </button>
-              <button onClick={() => setImpositionMode("signature16")} className={`py-3 px-2 rounded-xl text-sm font-bold border-2 transition-all ${impositionMode === 'signature16' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-100 bg-white text-slate-500 hover:border-blue-200'}`}>
-                16P 책자 접지
-              </button>
+          <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111]">
+            <div className="p-4 bg-[#F5F4F0] dark:bg-[#2A2A2A] border-b-2 border-[#222222] dark:border-[#444444] font-black text-[#222222] dark:text-[#EAEAEA] flex items-center gap-2 text-sm tracking-widest">
+              <span className="material-symbols-outlined text-[18px]">grid_view</span> 배치 방식 설정
             </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <button 
+                  onClick={() => setImpositionMode("repeat")} 
+                  className={`py-3 px-2 text-sm font-bold border-2 transition-all flex items-center justify-center gap-2 ${impositionMode === 'repeat' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-[#1A233A] text-blue-800 dark:text-blue-300' : 'border-[#E5E4E0] dark:border-[#333333] hover:border-[#222222] dark:hover:border-[#EAEAEA] text-[#666666] dark:text-[#A0A0A0]'}`}
+                >
+                  <div className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${impositionMode === 'repeat' ? 'border-blue-600 dark:border-blue-500' : 'border-[#A0A0A0]'}`}>
+                    {impositionMode === 'repeat' && <div className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-500" />}
+                  </div>
+                  1장 반복 (명함/전단)
+                </button>
+                <button 
+                  onClick={() => setImpositionMode("signature16")} 
+                  className={`py-3 px-2 text-sm font-bold border-2 transition-all flex items-center justify-center gap-2 ${impositionMode === 'signature16' ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-[#1A233A] text-blue-800 dark:text-blue-300' : 'border-[#E5E4E0] dark:border-[#333333] hover:border-[#222222] dark:hover:border-[#EAEAEA] text-[#666666] dark:text-[#A0A0A0]'}`}
+                >
+                  <div className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center ${impositionMode === 'signature16' ? 'border-blue-600 dark:border-blue-500' : 'border-[#A0A0A0]'}`}>
+                    {impositionMode === 'signature16' && <div className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-500" />}
+                  </div>
+                  16페이지 묶음 (책자)
+                </button>
+              </div>
 
-            <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">총 페이지 수 (p)</label>
-                  <input type="number" value={pages} onChange={(e) => setPages(Number(e.target.value))} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold" min="1" />
+                  <label className="block text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mb-1">총 페이지 수 (p)</label>
+                  <input type="number" value={pages} onChange={(e) => setPages(Number(e.target.value))} className="w-full px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold outline-none focus:shadow-[4px_4px_0px_#222222] dark:focus:shadow-[4px_4px_0px_#111111] focus:-translate-y-1 transition-all" min="1" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">인쇄면</label>
-                  <select value={sides} onChange={(e) => { setSides(Number(e.target.value)); setPreviewSide("front"); }} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold">
-                    <option value={1}>단면 (1면)</option>
-                    <option value={2}>양면 (2면)</option>
+                  <label className="block text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mb-1">인쇄면</label>
+                  <select value={sides} onChange={(e) => { setSides(Number(e.target.value)); setPreviewSide("front"); }} className="w-full px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold outline-none cursor-pointer">
+                    <option value={1}>단면 (한 쪽만 인쇄)</option>
+                    <option value={2}>양면 (양 쪽 모두 인쇄)</option>
                   </select>
                 </div>
               </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">여백/도련 (mm)</label>
-                  <input type="number" value={bleed} onChange={(e) => setBleed(Number(e.target.value))} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm" />
+                  <label className="block text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mb-1">여백 (도련 / mm)</label>
+                  <input type="number" value={bleed} onChange={(e) => setBleed(Number(e.target.value))} className="w-full px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold outline-none focus:shadow-[4px_4px_0px_#222222] dark:focus:shadow-[4px_4px_0px_#111111] focus:-translate-y-1 transition-all" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">사용 전지 선택</label>
-                  <select value={paperPref} onChange={(e) => setPaperPref(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold">
-                    <option value="auto">자동 추천</option>
-                    <option value="guk">국전지</option>
-                    <option value="4x6">4x6전지</option>
+                  <label className="block text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mb-1">사용 전지 선택</label>
+                  <select value={paperPref} onChange={(e) => setPaperPref(e.target.value)} className="w-full px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold outline-none cursor-pointer">
+                    <option value="auto">자동 추천 (가장 효율적)</option>
+                    <option value="guk">국전지 (939x636)</option>
+                    <option value="4x6">4x6전지 (1091x788)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* ⭐️ 누락되어 있던 수량 입력 창 추가 */}
+              <div>
+                <label className="block text-xs font-bold text-blue-600 dark:text-blue-400 mb-1">제작 수량 (부 / 개)</label>
+                <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))} className="w-full px-4 py-2 border-2 border-blue-600 dark:border-blue-400 bg-white dark:bg-[#121212] text-blue-600 dark:text-blue-400 text-lg font-black outline-none focus:shadow-[4px_4px_0px_#2563eb] focus:-translate-y-1 transition-all" min="1" placeholder="예: 1000" />
               </div>
             </div>
           </div>
@@ -378,94 +405,99 @@ export default function YieldCalcPage() {
 
         {/* 오른쪽 뷰어 패널 */}
         <div className="lg:col-span-8 space-y-6">
+          
+          {/* 상단 3개 결과 요약 박스 (쉬운 용어 적용) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-800 rounded-2xl p-6 shadow-lg flex flex-col justify-center">
-              <span className="text-blue-400 text-[10px] font-bold uppercase tracking-widest block mb-1">추천 전지 및 절수</span>
-              <h4 className="text-white font-black text-2xl">{result ? result.name : "-"}</h4>
-              <p className="text-slate-400 text-sm mt-1">{result ? `1장당 ${result.yield}개 안착 (${result.yield}절)` : "-"}</p>
+            <div className="bg-[#222222] dark:bg-[#111111] border-2 border-[#222222] dark:border-[#444444] p-6 flex flex-col justify-center shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111]">
+              <span className="text-[#A0A0A0] text-[10px] font-bold tracking-widest block mb-1">추천 종이 크기 및 효율</span>
+              <h4 className="text-[#F5F4F0] font-black text-2xl">{result ? result.name : "-"}</h4>
+              <p className="text-[#A0A0A0] text-sm mt-1 font-mono">{result ? `1장에 ${result.yield}개 배치 (${result.yield}절)` : "-"}</p>
             </div>
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-center">
-              <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest block mb-1">정매수 (로스 제외)</span>
+            
+            <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] p-6 flex flex-col justify-center shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111]">
+              <span className="text-[#666666] dark:text-[#A0A0A0] text-[10px] font-bold tracking-widest block mb-1">순수 필요 종이 (여유분 제외)</span>
               <div className="flex items-baseline gap-1">
-                <h4 className="text-slate-900 font-black text-3xl">{result ? result.actualReams.toFixed(3) : "0"}</h4>
-                <span className="text-slate-500 font-bold text-sm">연</span>
+                <h4 className="text-[#222222] dark:text-[#EAEAEA] font-black text-3xl tracking-tighter">{result ? result.actualReams.toFixed(3) : "0"}</h4>
+                <span className="text-[#666666] dark:text-[#A0A0A0] font-bold text-sm">연(500장)</span>
               </div>
             </div>
-            <div className="bg-blue-50 rounded-2xl p-6 shadow-sm border border-blue-100 flex flex-col justify-center">
-              <span className="text-blue-500 text-[10px] font-bold uppercase tracking-widest block mb-1">발주 수량 (여분 포함)</span>
+            
+            <div className="bg-blue-50 dark:bg-[#1A233A] border-2 border-blue-600 dark:border-blue-500 p-6 flex flex-col justify-center shadow-[4px_4px_0px_#2563eb] dark:shadow-[4px_4px_0px_#3b82f6]">
+              <span className="text-blue-600 dark:text-blue-400 text-[10px] font-bold tracking-widest block mb-1">최종 주문 종이 (여유분 10% 포함)</span>
               <div className="flex items-baseline gap-1">
-                <h4 className="text-blue-700 font-black text-3xl">{result ? result.neededReams.toFixed(3) : "0"}</h4>
-                <span className="text-blue-600 font-bold text-sm">연</span>
+                <h4 className="text-blue-800 dark:text-blue-300 font-black text-3xl tracking-tighter">{result ? result.neededReams.toFixed(3) : "0"}</h4>
+                <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">연(500장)</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 h-[700px] flex flex-col relative overflow-hidden">
+          {/* 중앙 미리보기 패널 */}
+          <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] flex flex-col h-[700px] relative overflow-hidden transition-colors">
             
-            <div className="bg-[#1e293b] px-6 py-4 flex justify-between items-center shrink-0">
+            <div className="bg-[#222222] dark:bg-[#111111] px-6 py-4 flex justify-between items-center border-b-2 border-[#222222] dark:border-[#444444] shrink-0">
               <div className="flex items-center gap-6">
-                <span className="text-xs font-bold text-slate-400 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm">visibility</span> 조판 미리보기
+                <span className="text-xs font-black tracking-widest text-[#F5F4F0] flex items-center gap-2 uppercase">
+                  <span className="material-symbols-outlined text-[16px]">visibility</span> 미리보기
                 </span>
                 
                 {sides === 2 && (
-                  <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
-                    <button onClick={() => setPreviewSide("front")} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${previewSide === 'front' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>앞면</button>
-                    <button onClick={() => setPreviewSide("back")} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${previewSide === 'back' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>뒷면</button>
+                  <div className="flex border-2 border-[#F5F4F0] dark:border-[#444444]">
+                    <button onClick={() => setPreviewSide("front")} className={`px-4 py-1.5 text-xs font-bold transition-all border-r-2 border-[#F5F4F0] dark:border-[#444444] ${previewSide === 'front' ? 'bg-[#F5F4F0] text-[#222222] dark:bg-[#444444] dark:text-[#EAEAEA]' : 'text-[#A0A0A0] hover:bg-[#333333]'}`}>앞면</button>
+                    <button onClick={() => setPreviewSide("back")} className={`px-4 py-1.5 text-xs font-bold transition-all ${previewSide === 'back' ? 'bg-[#F5F4F0] text-[#222222] dark:bg-[#444444] dark:text-[#EAEAEA]' : 'text-[#A0A0A0] hover:bg-[#333333]'}`}>뒷면</button>
                   </div>
                 )}
               </div>
 
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer mr-4">
-                  <input type="checkbox" checked={includeCropMarks} onChange={(e) => setIncludeCropMarks(e.target.checked)} className="w-3.5 h-3.5 rounded text-blue-500 focus:ring-0 bg-slate-700 border-slate-600" />
+                <label className="flex items-center gap-2 text-xs font-bold text-[#F5F4F0] cursor-pointer mr-4">
+                  <input type="checkbox" checked={includeCropMarks} onChange={(e) => setIncludeCropMarks(e.target.checked)} className="w-4 h-4 cursor-pointer" />
                   재단선 긋기
                 </label>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setCurrentSheetIdx(Math.max(0, currentSheetIdx - 1))} disabled={currentSheetIdx === 0} className="text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center">
-                    <span className="material-symbols-outlined">chevron_left</span>
+                  <button onClick={() => setCurrentSheetIdx(Math.max(0, currentSheetIdx - 1))} disabled={currentSheetIdx === 0} className="text-[#A0A0A0] hover:text-[#F5F4F0] disabled:opacity-30 disabled:cursor-not-allowed flex items-center">
+                    <span className="material-symbols-outlined text-[24px]">chevron_left</span>
                   </button>
-                  <span className="text-sm font-bold text-white w-20 text-center">{currentSheetIdx + 1} / {totalSheets} 대</span>
-                  <button onClick={() => setCurrentSheetIdx(Math.min(totalSheets - 1, currentSheetIdx + 1))} disabled={currentSheetIdx === totalSheets - 1} className="text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed flex items-center">
-                    <span className="material-symbols-outlined">chevron_right</span>
+                  <span className="text-sm font-black text-[#F5F4F0] w-20 text-center font-mono">{currentSheetIdx + 1} / {totalSheets} 판</span>
+                  <button onClick={() => setCurrentSheetIdx(Math.min(totalSheets - 1, currentSheetIdx + 1))} disabled={currentSheetIdx === totalSheets - 1} className="text-[#A0A0A0] hover:text-[#F5F4F0] disabled:opacity-30 disabled:cursor-not-allowed flex items-center">
+                    <span className="material-symbols-outlined text-[24px]">chevron_right</span>
                   </button>
                 </div>
               </div>
             </div>
             
-            <div className="flex-1 bg-slate-300 relative">
-              {/* 🌟 렌더링 텍스트 간소화! */}
+            <div className="flex-1 bg-[#2A2A2A] relative">
               {isGenerating && (
-                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center z-10">
-                  <span className="material-symbols-outlined text-5xl text-white animate-spin mb-4">settings_suggest</span>
-                  <p className="text-white font-bold text-lg drop-shadow-md">렌더링 중...</p>
+                <div className="absolute inset-0 bg-[#222222]/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                  <span className="material-symbols-outlined text-white text-5xl animate-spin mb-4">settings</span>
+                  <p className="text-white font-black tracking-widest text-lg drop-shadow-md">렌더링 중...</p>
                 </div>
               )}
               
               {previewUrls[`${currentSheetIdx}-${previewSide}`] ? (
-                <iframe src={`${previewUrls[`${currentSheetIdx}-${previewSide}`]}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-0" title="Imposed Preview" />
+                <div className="w-full h-full p-4 bg-[#121212]">
+                  <iframe src={`${previewUrls[`${currentSheetIdx}-${previewSide}`]}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-2 border-[#444444] bg-white" title="Imposed Preview" />
+                </div>
               ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-100">
-                  <span className="material-symbols-outlined text-6xl mb-3 opacity-30">picture_as_pdf</span>
-                  <p className="text-sm font-medium opacity-50">PDF를 업로드하면 조판된 결과가 나타납니다.</p>
+                <div className="w-full h-full flex flex-col items-center justify-center text-[#A0A0A0] dark:text-[#666666]">
+                  <span className="material-symbols-outlined text-6xl mb-3 opacity-50">picture_as_pdf</span>
+                  <p className="text-sm font-bold tracking-widest">PDF를 업로드하면 조판된 결과가 나타납니다.</p>
                 </div>
               )}
             </div>
 
-            <div className="bg-white border-t border-slate-200 p-4 flex justify-between items-center shrink-0">
+            <div className="bg-[#F5F4F0] dark:bg-[#1E1E1E] border-t-2 border-[#222222] dark:border-[#444444] p-4 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-6">
                 <div className="text-sm">
-                  <span className="text-slate-400 font-medium">전지: </span>
-                  <span className="font-bold text-slate-800">{result ? `${result.name} (${result.yield}절)` : "-"}</span>
+                  <span className="text-[#666666] dark:text-[#A0A0A0] font-bold">전지 크기: </span>
+                  <span className="font-black text-[#222222] dark:text-[#EAEAEA]">{result ? `${result.name} (${result.yield}개 배치 가능)` : "-"}</span>
                 </div>
               </div>
-              {/* 🌟 동적 파일명 적용! */}
               <a 
                 href={fullPdfUrl || "#"}
                 download={getDownloadFileName()}
-                className={`bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 ${(!fullPdfUrl || isGenerating) ? 'opacity-50 pointer-events-none' : ''}`}
+                className={`bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-6 py-2.5 font-black shadow-[4px_4px_0px_#A0A0A0] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all flex items-center gap-2 ${(!fullPdfUrl || isGenerating) ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                <span className="material-symbols-outlined text-sm">download</span> 전체 인쇄용 PDF 저장
+                <span className="material-symbols-outlined text-[18px]">download</span> 전체 인쇄용 PDF 다운로드
               </a>
             </div>
 

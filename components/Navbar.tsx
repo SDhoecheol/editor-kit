@@ -1,17 +1,30 @@
 "use client";
 
 import Link from "next/link";
+// ⭐️ 해결책: 전체 주소가 아닌, 현재 활성화된 '메뉴 폴더'만 정확히 추적하는 훅으로 교체!
+import { useSelectedLayoutSegment } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
 export default function Navbar() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  
+  // ⭐️ 핵심: 메인 홈이면 null, 커뮤니티면 'community', 유틸리티면 'tools'를 즉각 반환합니다.
+  const segment = useSelectedLayoutSegment();
 
-  // 클라이언트 렌더링 확인 (다크모드 아이콘 깜빡임 방지)
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const getTabStyle = (targetSegment: string | null) => {
+    // 현재 폴더(segment)와 타겟 폴더가 일치하면 활성화!
+    const isActive = segment === targetSegment;
+    
+    return isActive
+      ? "text-[#222222] dark:text-[#EAEAEA] border-b-2 border-[#222222] dark:border-[#EAEAEA] pb-1 transition-colors"
+      : "text-[#A0A0A0] dark:text-[#666666] border-b-2 border-transparent hover:text-[#222222] dark:hover:text-[#EAEAEA] pb-1 transition-colors";
+  };
 
   return (
     <nav className="bg-white dark:bg-[#1E1E1E] border-b-4 border-[#222222] dark:border-[#444444] sticky top-0 z-50 transition-colors duration-300">
@@ -24,19 +37,21 @@ export default function Navbar() {
           <Link href="/" className="text-2xl font-black tracking-tighter flex items-center gap-2 text-[#222222] dark:text-[#EAEAEA]">
             <span className="material-symbols-outlined text-[28px]">layers</span> EditorKit
           </Link>
+          
           <div className="hidden md:flex items-center gap-6 font-bold text-sm">
-            <Link href="/" className="text-[#222222] dark:text-[#EAEAEA] border-b-2 border-[#222222] dark:border-[#EAEAEA] pb-1 transition-colors">홈</Link>
-            <Link href="/community" className="text-[#A0A0A0] dark:text-[#666666] hover:text-[#222222] dark:hover:text-[#EAEAEA] pb-1 border-b-2 border-transparent transition-colors">커뮤니티</Link>
-            <Link href="/tools" className="text-[#A0A0A0] dark:text-[#666666] hover:text-[#222222] dark:hover:text-[#EAEAEA] pb-1 border-b-2 border-transparent transition-colors">유틸리티</Link>
+            {/* ⭐️ segment 값을 기준으로 비교합니다. 메인홈은 null, 나머지는 폴더명을 적습니다 */}
+            <Link href="/" className={getTabStyle(null)}>홈</Link>
+            <Link href="/community" className={getTabStyle("community")}>커뮤니티</Link>
+            <Link href="/tools" className={getTabStyle("tools")}>유틸리티</Link>
           </div>
         </div>
 
         {/* ==========================================
-            우측 유저 액션 (다크모드, 재화, 버튼, 프로필)
+            우측 유저 액션
             ========================================== */}
         <div className="flex items-center gap-4">
           
-          {/* ⭐️ 전역 다크모드 토글 버튼 */}
+          {/* 다크모드 토글 버튼 */}
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="w-10 h-10 flex items-center justify-center border-2 border-[#222222] dark:border-[#444444] bg-[#F5F4F0] dark:bg-[#1E1E1E] shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
@@ -63,7 +78,6 @@ export default function Navbar() {
           {/* 유저 프로필 아이콘 */}
           <div className="w-8 h-8 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] flex items-center justify-center font-black cursor-pointer hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors relative">
             <span className="text-[#222222] dark:text-[#EAEAEA]">E</span>
-            {/* 온라인 상태 뱃지 */}
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#1E1E1E] rounded-full"></span>
           </div>
 

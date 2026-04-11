@@ -5,19 +5,19 @@ import * as pdfjsLib from "pdfjs-dist";
 // @ts-ignore
 import HTMLFlipBook from "react-pageflip";
 
-// 🔥 TypeScript 억지 에러 방지
+// TypeScript 억지 에러 방지
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const FlipBook = HTMLFlipBook as any;
 
 const pdfjsVersion = pdfjsLib.version;
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`;
 
-// 플립북에 들어갈 개별 페이지 컴포넌트
+// 가제본에 들어갈 개별 페이지 컴포넌트
 const Page = forwardRef<HTMLDivElement, { imageUrl: string; number: number }>((props, ref) => {
   return (
-    <div className="bg-white shadow-[inset_0_0_20px_rgba(0,0,0,0.05)] flex items-center justify-center overflow-hidden border-r border-slate-200/50" ref={ref}>
+    <div className="bg-white flex items-center justify-center overflow-hidden border-r border-[#E5E4E0] dark:border-[#333333]" ref={ref}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={props.imageUrl} alt={`Page ${props.number}`} className="w-full h-full object-contain" />
+      <img src={props.imageUrl} alt={`${props.number}페이지`} className="w-full h-full object-contain" />
     </div>
   );
 });
@@ -29,7 +29,7 @@ export default function FlipbookPage() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
   
-  // 책 렌더링 사이즈 (컨테이너에 꽉 차게 조금 더 키웠습니다)
+  // 책 렌더링 사이즈
   const [bookW, setBookW] = useState<number>(450);
   const [bookH, setBookH] = useState<number>(650);
 
@@ -65,11 +65,11 @@ export default function FlipbookPage() {
           try {
             const page = await pdf.getPage(i);
             
-            // 첫 페이지 해상도를 기준으로 3D 책의 가로세로 비율 결정
+            // 첫 페이지 해상도를 기준으로 입체 책의 가로세로 비율 결정
             if (i === 1) {
               const viewport = page.getViewport({ scale: 1.0 });
               const ratio = viewport.width / viewport.height;
-              setBookH(650); // 높이 상향
+              setBookH(650);
               setBookW(Math.round(650 * ratio));
             }
 
@@ -92,9 +92,9 @@ export default function FlipbookPage() {
             fallbackCanvas.width = 400; fallbackCanvas.height = 600;
             const fbCtx = fallbackCanvas.getContext("2d");
             if (fbCtx) {
-              fbCtx.fillStyle = "#f87171"; fbCtx.fillRect(0,0,400,600);
-              fbCtx.fillStyle = "white"; fbCtx.font = "20px sans-serif";
-              fbCtx.fillText("Page Render Error", 100, 300);
+              fbCtx.fillStyle = "#E5E4E0"; fbCtx.fillRect(0,0,400,600);
+              fbCtx.fillStyle = "#222222"; fbCtx.font = "bold 20px sans-serif";
+              fbCtx.fillText("페이지 렌더링 오류", 100, 300);
               newImages.push(fallbackCanvas.toDataURL("image/jpeg", 0.5));
             }
           }
@@ -122,113 +122,124 @@ export default function FlipbookPage() {
   };
 
   return (
-    <div className="bg-slate-50 min-h-screen py-8">
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
-      <div className="max-w-7xl mx-auto px-4">
+    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-12">
+      
+      {/* 헤더 영역 */}
+      <header className="border-b-4 border-[#222222] dark:border-[#444444] pb-6 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="bg-[#222222] text-[#F5F4F0] dark:bg-[#333333] dark:text-[#EAEAEA] px-2 py-0.5 text-[10px] font-black tracking-widest">
+              유틸리티 / 06
+            </span>
+            <span className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0] tracking-widest">
+              PDF 책자 입체 검수
+            </span>
+          </div>
+          <h1 className="text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight">
+            웹 가제본 뷰어
+          </h1>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <h1 className="text-3xl font-bold text-slate-800 mb-8 text-center flex items-center justify-center gap-3">
-          <span className="material-symbols-outlined text-4xl text-blue-600">menu_book</span>
-          2.5D 플립북 목업 뷰어
-        </h1>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 좌측 패널: 업로드 및 안내 */}
+        <div className="lg:col-span-4 xl:col-span-3 space-y-6">
           
-          <div className="lg:col-span-4 xl:col-span-3 space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 border-dashed border-2 hover:border-blue-400 transition-colors relative">
-              <input type="file" id="mockup-file" accept=".pdf" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-              {!fileName ? (
-                <div className="text-center pointer-events-none">
-                  <div className="bg-blue-50 w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <span className="material-symbols-outlined text-blue-500 text-2xl">upload_file</span>
-                  </div>
-                  <p className="text-sm font-bold text-slate-700">책자 PDF 업로드</p>
-                  <p className="text-xs text-slate-400 mt-1">클릭하거나 드래그하여 첨부</p>
+          <div className="bg-white dark:bg-[#1E1E1E] border-2 border-dashed border-[#222222] dark:border-[#444444] p-6 relative hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors">
+            <input type="file" id="mockup-file" accept=".pdf" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+            {!fileName ? (
+              <div className="text-center pointer-events-none">
+                <span className="material-symbols-outlined text-4xl mb-2 text-[#222222] dark:text-[#EAEAEA]">menu_book</span>
+                <p className="text-sm font-black text-[#222222] dark:text-[#EAEAEA]">내지 PDF 원고 업로드</p>
+                <p className="text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mt-1">클릭하거나 드래그하여 첨부</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 z-20 relative">
+                <span className="material-symbols-outlined text-3xl text-blue-600 dark:text-blue-400">task</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-[#222222] dark:text-[#EAEAEA] truncate">{fileName}</p>
+                  <p className="text-xs font-mono text-[#666666] dark:text-[#A0A0A0] mt-0.5">총 {images.length}페이지</p>
                 </div>
-              ) : (
-                <div className="flex items-center gap-4 z-20 relative">
-                  <div className="bg-emerald-50 p-3 rounded-lg">
-                    <span className="material-symbols-outlined text-emerald-500">task</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-800 truncate">{fileName}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">총 {images.length}페이지</p>
-                  </div>
-                  <button onClick={resetFile} className="text-slate-400 hover:text-slate-600 bg-white rounded-full p-1 border">
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                </div>
-              )}
-            </div>
+                <button onClick={resetFile} className="text-[#A0A0A0] hover:text-[#222222] dark:hover:text-[#EAEAEA] transition-colors flex items-center justify-center border border-[#E5E4E0] dark:border-[#444444] bg-white dark:bg-[#121212] w-8 h-8 rounded-none">
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            )}
+          </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                <span className="material-symbols-outlined text-blue-500 text-lg">info</span> 이용 안내
-              </h3>
-              <ul className="text-sm text-slate-600 space-y-2 mt-4">
-                <li>• 다수의 페이지가 포함된 <b>내지 PDF</b>를 올려주세요.</li>
-                <li>• 우측 뷰어의 <b>모서리를 드래그</b>하거나 클릭하면 실제 책처럼 넘어갑니다.</li>
-                <li>• <b>[TIP]</b> 양면 펼침면 디자인을 검수하기에 최적화되어 있습니다.</li>
+          <div className="border-2 border-[#222222] dark:border-[#444444] border-l-8 bg-white dark:bg-[#1E1E1E] shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] p-6 flex gap-4 items-start transition-colors">
+            <span className="material-symbols-outlined text-[#222222] dark:text-[#EAEAEA]">info</span>
+            <div>
+              <h4 className="font-bold text-[#222222] dark:text-[#EAEAEA]">이용 안내</h4>
+              <ul className="text-sm text-[#666666] dark:text-[#A0A0A0] space-y-2 mt-2 leading-relaxed">
+                <li>• 다수의 페이지가 포함된 <strong className="text-[#222222] dark:text-[#EAEAEA]">단면 내지 PDF</strong>를 올려주세요.</li>
+                <li>• 우측 화면의 <strong className="text-[#222222] dark:text-[#EAEAEA]">모서리를 드래그</strong>하거나 클릭하면 실제 책처럼 넘어갑니다.</li>
+                <li>• 고객에게 시안을 확인받거나, 양면 펼침면(스프레드) 디자인을 검수할 때 유용합니다.</li>
               </ul>
             </div>
           </div>
+        </div>
 
-          <div className="lg:col-span-8 xl:col-span-9 bg-[#1e293b] rounded-2xl shadow-2xl border border-slate-700 h-[800px] flex flex-col relative overflow-hidden">
+        {/* 우측 패널: 가제본 미리보기 화면 (디자인 통일) */}
+        <div className="lg:col-span-8 xl:col-span-9 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] flex flex-col h-[800px]">
+          
+          {/* 다크 헤더 */}
+          <div className="bg-[#222222] dark:bg-[#111111] px-6 py-4 flex items-center justify-between border-b-2 border-[#222222] dark:border-[#444444] shrink-0">
+            <div className="flex items-center gap-4">
+              <span className="text-[#F5F4F0] font-black tracking-widest text-xs">가제본 미리보기</span>
+            </div>
+          </div>
+
+          <div className="flex-1 bg-[#2A2A2A] relative flex items-center justify-center overflow-hidden">
             
-            <div className="px-6 py-4 flex items-center justify-between shrink-0 border-b border-slate-800">
-              <div className="flex items-center gap-4">
-                <span className="text-slate-400 font-bold tracking-widest text-xs">MOCKUP PREVIEW</span>
+            {/* 로딩 화면 (브루탈리즘 스타일 진행률 바) */}
+            {isGenerating && (
+              <div className="absolute inset-0 bg-[#222222]/80 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+                <span className="material-symbols-outlined text-[#F5F4F0] text-5xl animate-spin mb-4">autorenew</span>
+                <p className="text-[#F5F4F0] font-black tracking-widest text-lg mb-6">PDF를 입체 책자로 변환 중입니다...</p>
+                
+                <div className="w-64 h-4 bg-[#111111] border-2 border-[#F5F4F0] relative">
+                  <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                </div>
+                <p className="text-blue-400 font-mono font-bold mt-2">{progress}%</p>
               </div>
-            </div>
+            )}
 
-            <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
-              
-              {isGenerating && (
-                <div className="absolute inset-0 bg-[#1e293b]/80 backdrop-blur-sm flex flex-col items-center justify-center z-20">
-                  <span className="material-symbols-outlined text-5xl text-blue-400 animate-spin mb-4">settings_suggest</span>
-                  <p className="text-white font-bold text-lg drop-shadow-md">PDF를 3D 플립북으로 변환 중...</p>
-                  
-                  <div className="w-64 h-2 bg-slate-700 rounded-full mt-4 overflow-hidden">
-                    <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                  </div>
-                  <p className="text-slate-400 text-sm mt-2">{progress}%</p>
-                </div>
-              )}
-
-              {/* 🌟 튜닝 완료: 무조건 양면 고정 & 촌스러운 광택 제거 */}
-              {images.length > 0 && !isGenerating ? (
-                <div className="shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-center">
-                  <FlipBook 
-                    width={bookW} 
-                    height={bookH} 
-                    size="fixed"
-                    minWidth={315}
-                    maxWidth={bookW}
-                    minHeight={400}
-                    maxHeight={bookH}
-                    drawShadow={true}
-                    flippingTime={800}          /* 애니메이션 속도 약간 더 찰지게 변경 */
-                    usePortrait={false}         /* 🔥 1번 해결: 무조건 양면 펼침(Spread) 모드로 강제 고정! */
-                    startZIndex={0}
-                    autoSize={true}
-                    maxShadowOpacity={0.15}     /* 🔥 2번 해결: 0.5 -> 0.15 로 대폭 낮춰 싸구려 광택 제거 (무광 모조지 느낌) */
-                    showCover={true}            /* 첫 페이지는 표지처럼 우측에 단면으로 표시 (책의 원리) */
-                    mobileScrollSupport={true}
-                    ref={flipBookRef}
-                    className="flipbook-wrapper"
-                    style={{ margin: "0 auto" }}
-                  >
-                    {images.map((img, index) => (
-                      <Page key={index} imageUrl={img} number={index + 1} />
-                    ))}
-                  </FlipBook>
-                </div>
-              ) : !isGenerating && (
-                <div className="text-slate-500 text-center">
-                  <span className="material-symbols-outlined text-6xl mb-3 opacity-30">auto_stories</span>
-                  <p className="font-bold text-sm">PDF를 업로드하면 가상의 책이 생성됩니다.</p>
-                </div>
-              )}
-            </div>
+            {/* 책자 뷰어 */}
+            {images.length > 0 && !isGenerating ? (
+              <div className="flex items-center justify-center">
+                <FlipBook 
+                  width={bookW} 
+                  height={bookH} 
+                  size="fixed"
+                  minWidth={315}
+                  maxWidth={bookW}
+                  minHeight={400}
+                  maxHeight={bookH}
+                  drawShadow={true}
+                  flippingTime={800}          
+                  usePortrait={false}         /* 양면 펼침 모드 고정 */
+                  startZIndex={0}
+                  autoSize={true}
+                  maxShadowOpacity={0.15}     /* 무광 느낌으로 그림자 최소화 */
+                  showCover={true}            /* 첫 페이지는 표지 취급 */
+                  mobileScrollSupport={true}
+                  ref={flipBookRef}
+                  className="flipbook-wrapper"
+                  style={{ margin: "0 auto" }}
+                >
+                  {images.map((img, index) => (
+                    <Page key={index} imageUrl={img} number={index + 1} />
+                  ))}
+                </FlipBook>
+              </div>
+            ) : !isGenerating && (
+              <div className="text-[#A0A0A0] dark:text-[#666666] text-center">
+                <span className="material-symbols-outlined text-6xl mb-4 opacity-50">auto_stories</span>
+                <p className="font-bold text-sm tracking-widest">PDF 원고를 업로드하면 가상의 책이 생성됩니다.</p>
+              </div>
+            )}
           </div>
 
         </div>

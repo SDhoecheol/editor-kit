@@ -1,40 +1,86 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase"; // ⭐️ Supabase 연동
 
 export default function MyPage() {
   const [activeTab, setActiveCat] = useState("나의 활동");
+  const router = useRouter();
+
+  // ⭐️ 데이터 상태 관리
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        // 비로그인 유저는 로그인 페이지로 돌려보냄
+        router.replace("/login");
+        return;
+      }
+
+      setUser(session.user);
+
+      // profiles 테이블에서 내 정보 가져오기
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+
+      if (data && !error) {
+        setProfile(data);
+      }
+      setLoading(false);
+    };
+
+    fetchProfile();
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center space-y-4">
+        <span className="animate-spin material-symbols-outlined text-4xl text-[#A0A0A0]">sync</span>
+        <p className="font-bold text-[#A0A0A0] text-sm tracking-widest uppercase">Loading Profile...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-12">
       
-      {/* 1. 상단 프로필 헤더 */}
+      {/* 1. 상단 프로필 헤더 (진짜 데이터 연동) */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-[#222222] dark:border-[#444444] pb-8">
         <div className="flex items-center gap-6">
           <div className="w-20 h-20 md:w-24 md:h-24 bg-[#222222] dark:bg-[#EAEAEA] text-[#F5F4F0] dark:text-[#121212] flex items-center justify-center text-4xl font-black border-4 border-[#222222] dark:border-[#EAEAEA] shadow-[4px_4px_0px_#A0A0A0] dark:shadow-[4px_4px_0px_#111111]">
-            필
+            {/* 닉네임 첫 글자 표시 */}
+            {profile?.nickname ? profile.nickname.charAt(0).toUpperCase() : "U"}
           </div>
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="bg-blue-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
-                프로 등급
-              </span>
               <span className="bg-[#222222] dark:bg-[#EAEAEA] text-[#F5F4F0] dark:text-[#121212] px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
-                디자이너
+                {/* 직군 태그 연동 */}
+                {profile?.role_tag || "디자이너"}
               </span>
             </div>
             <h1 className="text-3xl md:text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight">
-              필터링천재
+              {/* 닉네임 연동 */}
+              {profile?.nickname || "에디터님"}
             </h1>
             <p className="text-sm font-bold text-[#A0A0A0] dark:text-[#666666] mt-1">
-              hello@editorkit.com
+              {/* 이메일 연동 */}
+              {user?.email}
             </p>
           </div>
         </div>
 
         <div className="flex gap-2">
-          <button className="px-5 py-2.5 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] font-bold text-sm hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors">
+          <button className="px-5 py-2.5 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] font-bold text-sm hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
             프로필 수정
           </button>
           <button className="px-5 py-2.5 border-2 border-[#222222] dark:border-[#EAEAEA] bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] font-black text-sm shadow-[2px_2px_0px_#A0A0A0] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">
@@ -45,7 +91,7 @@ export default function MyPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* 좌측: 잉크(Ink) 지갑 패널 */}
+        {/* 좌측: 잉크(Ink) 지갑 패널 (진짜 데이터 연동) */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] transition-colors overflow-hidden">
             
@@ -55,7 +101,10 @@ export default function MyPage() {
               </h2>
               <div className="flex items-end gap-2">
                 <span className="material-symbols-outlined text-3xl">water_drop</span>
-                <span className="text-5xl font-black tracking-tighter">1,240</span>
+                {/* 잉크 잔액 연동 */}
+                <span className="text-5xl font-black tracking-tighter">
+                  {profile?.ink_balance?.toLocaleString() || 0}
+                </span>
               </div>
             </div>
 
@@ -64,33 +113,13 @@ export default function MyPage() {
                 최근 잉크 내역
               </h3>
               <ul className="space-y-3">
+                {/* TODO: 나중에 ink_history 테이블과 연동할 부분 */}
                 <li className="flex justify-between items-start">
                   <div>
-                    <p className="text-xs font-bold text-[#222222] dark:text-[#EAEAEA]">Q&A 답변 채택 보상</p>
-                    <p className="text-[10px] font-bold text-[#A0A0A0] dark:text-[#666666] mt-0.5">2026.04.11 14:20</p>
+                    <p className="text-xs font-bold text-[#222222] dark:text-[#EAEAEA]">신규 가입 환영 보상</p>
+                    <p className="text-[10px] font-bold text-[#A0A0A0] dark:text-[#666666] mt-0.5">최근</p>
                   </div>
-                  <span className="text-xs font-black text-blue-600 dark:text-blue-400">+100 💧</span>
-                </li>
-                <li className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-[#222222] dark:text-[#EAEAEA]">자유게시판 게시글 작성</p>
-                    <p className="text-[10px] font-bold text-[#A0A0A0] dark:text-[#666666] mt-0.5">2026.04.10 09:15</p>
-                  </div>
-                  <span className="text-xs font-black text-blue-600 dark:text-blue-400">+30 💧</span>
-                </li>
-                <li className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-[#222222] dark:text-[#EAEAEA]">게시글 삭제 차감 (어뷰징 방지)</p>
-                    <p className="text-[10px] font-bold text-[#A0A0A0] dark:text-[#666666] mt-0.5">2026.04.09 18:05</p>
-                  </div>
-                  <span className="text-xs font-black text-red-600 dark:text-red-400">-30 💧</span>
-                </li>
-                <li className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-[#222222] dark:text-[#EAEAEA]">댓글 작성</p>
-                    <p className="text-[10px] font-bold text-[#A0A0A0] dark:text-[#666666] mt-0.5">2026.04.08 22:11</p>
-                  </div>
-                  <span className="text-xs font-black text-blue-600 dark:text-blue-400">+5 💧</span>
+                  <span className="text-xs font-black text-blue-600 dark:text-blue-400">+0 💧</span>
                 </li>
               </ul>
               
@@ -133,7 +162,8 @@ export default function MyPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[1, 2, 3, 4, 5].map((num) => (
+                  {/* TODO: 나중에 posts 테이블에서 본인이 작성한 글 연동 */}
+                  {[1, 2, 3].map((num) => (
                     <tr key={num} className="border-b border-[#E5E4E0] dark:border-[#333333] cursor-pointer hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors group text-center">
                       <td className="py-4">
                         <span className="text-[11px] font-bold px-1.5 py-0.5 border border-[#E5E4E0] dark:border-[#444444] text-[#666666] dark:text-[#A0A0A0]">
@@ -142,11 +172,11 @@ export default function MyPage() {
                       </td>
                       <td className="py-4 px-4 text-left">
                         <h3 className="text-sm font-bold text-[#222222] dark:text-[#EAEAEA] group-hover:text-blue-600 transition-colors truncate max-w-[200px] sm:max-w-[300px]">
-                          오늘 거래처 진상 때문에 진짜 퇴사 마렵네요...
+                          게시판 데이터 연동 준비 중입니다.
                         </h3>
                       </td>
-                      <td className="py-4 text-xs font-mono text-[#A0A0A0] dark:text-[#666666]">04.11</td>
-                      <td className="py-4 text-xs font-mono text-[#A0A0A0] dark:text-[#666666]">234</td>
+                      <td className="py-4 text-xs font-mono text-[#A0A0A0] dark:text-[#666666]">00.00</td>
+                      <td className="py-4 text-xs font-mono text-[#A0A0A0] dark:text-[#666666]">0</td>
                     </tr>
                   ))}
                 </tbody>
@@ -161,7 +191,7 @@ export default function MyPage() {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-[#222222] dark:text-[#EAEAEA]">하리꼬미 조판 계산기</h4>
-                    <p className="text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mt-1">오늘 14:20 사용</p>
+                    <p className="text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mt-1">도구 바로가기</p>
                   </div>
                 </Link>
                 <Link href="/tools/mockup3d" className="group border-2 border-[#E5E4E0] dark:border-[#333333] p-4 hover:border-[#222222] dark:hover:border-[#EAEAEA] transition-colors flex items-center gap-4">
@@ -170,7 +200,7 @@ export default function MyPage() {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-[#222222] dark:text-[#EAEAEA]">3D 패키징 목업</h4>
-                    <p className="text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mt-1">어제 09:15 사용</p>
+                    <p className="text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mt-1">도구 바로가기</p>
                   </div>
                 </Link>
               </div>

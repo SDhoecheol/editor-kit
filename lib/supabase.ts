@@ -1,8 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-// 금고(.env.local)에서 주소와 열쇠를 꺼내오는 코드입니다.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-
-// 꺼내온 열쇠로 수파베이스와 연결된 'supabase'라는 객체를 만듭니다.
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// ⭐️ 브라우저(클라이언트) 전용 최신 클라이언트로 교체하여 쿠키 세션을 정상적으로 읽어옵니다.
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);

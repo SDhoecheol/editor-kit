@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSelectedLayoutSegment, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase"; // ⭐️ Supabase 불러오기
+import { supabase } from "../lib/supabase";
 
 export default function Navbar() {
   const { theme, setTheme } = useTheme();
@@ -12,22 +12,20 @@ export default function Navbar() {
   const segment = useSelectedLayoutSegment();
   const router = useRouter();
 
-  // ⭐️ 유저 정보 및 DB 프로필 상태 관리
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
     setMounted(true);
 
-    // 1. 현재 세션 확인 및 프로필 가져오기
     const fetchUserAndProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
 
       if (session?.user) {
-        // users 테이블에서 내 닉네임과 잉크 가져오기
+        // ⭐️ users가 아니라 profiles 테이블에서 가져오기!
         const { data, error } = await supabase
-          .from("users")
+          .from("profiles")
           .select("nickname, ink_balance")
           .eq("id", session.user.id)
           .single();
@@ -38,11 +36,11 @@ export default function Navbar() {
 
     fetchUserAndProfile();
 
-    // 2. 로그인/로그아웃 실시간 감지
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user || null);
       if (session?.user) {
-        const { data } = await supabase.from("users").select("*").eq("id", session.user.id).single();
+        // ⭐️ 여기도 profiles로 수정!
+        const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
         setProfile(data);
       } else {
         setProfile(null);
@@ -55,8 +53,17 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = async () => {
+    setUser(null);
+    setProfile(null);
+
+    try {
+      await fetch('/auth/logout', { method: 'POST' });
+    } catch(e) {
+      console.error(e);
+    }
+    
     await supabase.auth.signOut();
-    router.push("/");
+    window.location.href = "/";
   };
 
   const getTabStyle = (targetSegment: string | null) => {
@@ -70,7 +77,6 @@ export default function Navbar() {
     <nav className="bg-white dark:bg-[#1E1E1E] border-b-4 border-[#222222] dark:border-[#444444] sticky top-0 z-50 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         
-        {/* 로고 및 메인 메뉴 */}
         <div className="flex items-center gap-10">
           <Link href="/" className="text-2xl font-black tracking-tighter flex items-center gap-2 text-[#222222] dark:text-[#EAEAEA] hover:opacity-80 transition-opacity">
             <span className="material-symbols-outlined text-[28px]">layers</span> EditorKit
@@ -79,11 +85,10 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-6 text-sm mt-1">
             <Link href="/" className={getTabStyle(null)}>홈</Link>
             <Link href="/community" className={getTabStyle("community")}>라운지</Link>
-            <Link href="/tools/harikomi" className={getTabStyle("tools")}>유틸리티</Link>
+            <Link href="/tools" className={getTabStyle("tools")}>유틸리티</Link>
           </div>
         </div>
 
-        {/* 우측 유저 액션 */}
         <div className="flex items-center gap-3">
           
           <button
@@ -99,7 +104,6 @@ export default function Navbar() {
 
           <div className="w-px h-6 bg-[#E5E4E0] dark:bg-[#444444] mx-1"></div>
 
-          {/* ⭐️ 진짜 로그인 상태 연동 */}
           {user ? (
             <>
               {profile && (
@@ -115,7 +119,7 @@ export default function Navbar() {
 
               <Link href="/mypage" className="w-9 h-9 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#EAEAEA] flex items-center justify-center font-black hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors relative ml-1 shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
                 <span className="text-[#222222] dark:text-[#EAEAEA]">
-                  {profile?.nickname ? profile.nickname.charAt(0) : "U"}
+                  {profile?.nickname ? profile.nickname.charAt(0).toUpperCase() : "U"}
                 </span>
               </Link>
 

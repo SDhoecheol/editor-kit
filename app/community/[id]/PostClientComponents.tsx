@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { deletePost } from "../actions"; // ⭐️ 2단계에서 만든 서버 액션 불러오기
 
 // 1. 조회수 증가 트래커 (페이지 접속 시 1회 실행)
 export function ViewTracker({ postId }: { postId: string }) {
-  const router = useRouter(); // ⭐️ 라우터 추가
+  const router = useRouter();
 
   useEffect(() => {
     const trackView = async () => {
@@ -16,7 +17,7 @@ export function ViewTracker({ postId }: { postId: string }) {
         await supabase.rpc("increment_view_count", { p_id: postId });
         // 중복 카운트 방지 메모
         sessionStorage.setItem(`viewed_${postId}`, "true"); 
-        // ⭐️ 추가: DB에 조회수가 올랐으니, 서버 컴포넌트에게 최신 데이터를 가져오라고 찌름 (즉시 반영)
+        // 서버 컴포넌트에게 최신 데이터를 가져오라고 찌름
         router.refresh(); 
       }
     };
@@ -25,10 +26,11 @@ export function ViewTracker({ postId }: { postId: string }) {
   return null; 
 }
 
-// 2. 작성자 전용 액션 (수정/삭제)
+// 2. 작성자 전용 액션 (수정/삭제) ⭐️ 서버 액션 적용 완료
 export function PostActions({ postId, authorId }: { postId: string, authorId: string }) {
   const router = useRouter();
   const [isAuthor, setIsAuthor] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // 삭제 진행 중 상태
 
   useEffect(() => {
     const checkAuthor = async () => {
@@ -42,9 +44,19 @@ export function PostActions({ postId, authorId }: { postId: string, authorId: st
 
   const handleDelete = async () => {
     if (confirm("정말 이 글을 삭제하시겠습니까?")) {
-      await supabase.from("posts").delete().eq("id", postId);
-      router.push("/community");
-      router.refresh();
+      setIsDeleting(true);
+      
+      // ⭐️ 클라이언트에서 DB를 직접 조작하지 않고 서버 액션에게 부탁합니다!
+      const result = await deletePost(postId);
+      
+      if (result.success) {
+        alert(result.message);
+        router.push("/community"); 
+        // 서버에서 revalidatePath를 호출했으므로 router.refresh()가 없어도 최신 목록이 뜹니다.
+      } else {
+        alert(result.message);
+        setIsDeleting(false);
+      }
     }
   };
 
@@ -53,8 +65,13 @@ export function PostActions({ postId, authorId }: { postId: string, authorId: st
       <button className="px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors">
         수정
       </button>
-      <button onClick={handleDelete} className="px-4 py-2 border-2 border-red-600 bg-white dark:bg-[#1E1E1E] text-red-600 text-sm font-bold hover:bg-red-50 dark:hover:bg-[#3A1A1A] transition-colors">
-        삭제
+      <button 
+        onClick={handleDelete} 
+        disabled={isDeleting}
+        className="px-4 py-2 border-2 border-red-600 bg-white dark:bg-[#1E1E1E] text-red-600 text-sm font-bold hover:bg-red-50 dark:hover:bg-[#3A1A1A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+      >
+        {isDeleting && <span className="animate-spin material-symbols-outlined text-[16px]">sync</span>}
+        {isDeleting ? "삭제 중..." : "삭제"}
       </button>
     </div>
   );

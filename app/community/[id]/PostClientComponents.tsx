@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { deletePost } from "../actions"; // ⭐️ 2단계에서 만든 서버 액션 불러오기
+import { deletePost } from "../actions"; // ⭐️ 서버 액션 불러오기
 
 // 1. 조회수 증가 트래커 (페이지 접속 시 1회 실행)
 export function ViewTracker({ postId }: { postId: string }) {
@@ -26,7 +26,7 @@ export function ViewTracker({ postId }: { postId: string }) {
   return null; 
 }
 
-// 2. 작성자 전용 액션 (수정/삭제) ⭐️ 서버 액션 적용 완료
+// 2. 작성자 전용 액션 (수정/삭제) ⭐️ 수정 버튼 링크 연결 완료
 export function PostActions({ postId, authorId }: { postId: string, authorId: string }) {
   const router = useRouter();
   const [isAuthor, setIsAuthor] = useState(false);
@@ -46,13 +46,11 @@ export function PostActions({ postId, authorId }: { postId: string, authorId: st
     if (confirm("정말 이 글을 삭제하시겠습니까?")) {
       setIsDeleting(true);
       
-      // ⭐️ 클라이언트에서 DB를 직접 조작하지 않고 서버 액션에게 부탁합니다!
       const result = await deletePost(postId);
       
       if (result.success) {
         alert(result.message);
         router.push("/community"); 
-        // 서버에서 revalidatePath를 호출했으므로 router.refresh()가 없어도 최신 목록이 뜹니다.
       } else {
         alert(result.message);
         setIsDeleting(false);
@@ -62,7 +60,11 @@ export function PostActions({ postId, authorId }: { postId: string, authorId: st
 
   return (
     <div className="flex justify-end gap-2 mt-6">
-      <button className="px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors">
+      {/* ⭐️ 수정 버튼 클릭 시 수정 전용 페이지로 이동 */}
+      <button 
+        onClick={() => router.push(`/community/edit/${postId}`)}
+        className="px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors"
+      >
         수정
       </button>
       <button 

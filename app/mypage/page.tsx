@@ -2,54 +2,37 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase"; // ⭐️ Supabase 연동
 
 export default function MyPage() {
   const [activeTab, setActiveCat] = useState("나의 활동");
-  const router = useRouter();
 
   // ⭐️ 데이터 상태 관리
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // ⭐️ 미들웨어가 비로그인을 이미 차단했으므로 로딩/튕겨내기 로직 삭제!
     const fetchProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session?.user) {
-        // 비로그인 유저는 로그인 페이지로 돌려보냄
-        router.replace("/login");
-        return;
+      if (session?.user) {
+        setUser(session.user);
+        // profiles 테이블에서 내 정보 가져오기
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+
+        if (data) setProfile(data);
       }
-
-      setUser(session.user);
-
-      // profiles 테이블에서 내 정보 가져오기
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-
-      if (data && !error) {
-        setProfile(data);
-      }
-      setLoading(false);
     };
 
     fetchProfile();
-  }, [router]);
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center space-y-4">
-        <span className="animate-spin material-symbols-outlined text-4xl text-[#A0A0A0]">sync</span>
-        <p className="font-bold text-[#A0A0A0] text-sm tracking-widest uppercase">Loading Profile...</p>
-      </div>
-    );
-  }
+  // ⭐️ 로딩 스피너 UI 통째로 삭제 (화면 깜빡임 원천 차단)
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-12">

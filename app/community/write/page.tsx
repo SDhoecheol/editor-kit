@@ -28,35 +28,27 @@ function WriteEditorForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [user, setUser] = useState<any>(null);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     
-    const checkUser = async () => {
+    // ⭐️ 미들웨어가 비로그인 유저를 이미 막았으므로, 튕겨내는 로직/로딩 화면을 제거했습니다.
+    // 글을 DB에 넣을 때 필요한 작성자 정보(user.id, email)만 조용히 가져옵니다.
+    const fetchUser = async () => {
       try {
-        // ⭐️ 3초 폭탄 제거! 빠르고 안전한 getSession만 사용
         const { data: { session }, error } = await supabase.auth.getSession();
-        
         if (error) throw error;
-        
-        if (!session?.user) {
-          alert("글을 작성하려면 로그인이 필요합니다.");
-          router.replace("/login");
-        } else if (isMounted) {
+        if (session?.user && isMounted) {
           setUser(session.user);
         }
       } catch (error) {
-        console.error("인증 에러:", error);
-      } finally {
-        // 무조건 로딩 해제 (무한 스피너 방지)
-        if (isMounted) setIsAuthChecking(false);
+        console.error("유저 정보 로딩 에러:", error);
       }
     };
     
-    checkUser();
+    fetchUser();
     return () => { isMounted = false; };
-  }, [router]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +82,7 @@ function WriteEditorForm() {
 
       alert(`[${boardName}] 게시글이 성공적으로 등록되었습니다.`);
       
-      // ⭐️ 핵심! Next.js의 캐시를 우아하게 날려버리고 이동
+      // ⭐️ 글 등록 후 최신 상태를 반영하기 위해 캐시를 날리고 이동
       router.refresh(); 
       router.push("/community");
       
@@ -101,15 +93,6 @@ function WriteEditorForm() {
       setIsSubmitting(false); 
     } 
   };
-
-  if (isAuthChecking) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <span className="animate-spin material-symbols-outlined text-4xl text-[#A0A0A0]">sync</span>
-        <p className="font-bold text-[#A0A0A0] text-sm tracking-widest uppercase">에디터 인증 중...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12 md:py-20 space-y-8">
@@ -178,7 +161,7 @@ function WriteEditorForm() {
 
 export default function CommunityWritePage() {
   return (
-    <Suspense fallback={<div className="p-20 text-center font-bold">로딩 중...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><span className="animate-spin material-symbols-outlined text-4xl text-[#A0A0A0]">sync</span></div>}>
       <WriteEditorForm />
     </Suspense>
   );

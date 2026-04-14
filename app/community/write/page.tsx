@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import ReactMarkdown from "react-markdown"; // ⭐️ 마크다운 변환기 불러오기
+import TuiEditorWrapper from "@/components/TuiEditorWrapper"; // ⭐️ 새로 만든 에디터 포장지 불러오기
 
 const SUB_CATEGORIES: Record<string, string[]> = {
   "공지사항": ["안내", "업데이트", "이벤트"],
@@ -25,15 +25,12 @@ function WriteEditorForm() {
 
   const [subCategory, setSubCategory] = useState("");
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState<string>("");
+  const [content, setContent] = useState<string>(""); // 에디터 내용을 담을 상태
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // ⭐️ 미리보기 모드 상태 추가
-  const [isPreview, setIsPreview] = useState(false);
-  
   const [user, setUser] = useState<any>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // ⭐️ Toast UI Editor 인스턴스를 조작하기 위한 Ref
+  const editorRef = useRef<any>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,55 +47,61 @@ function WriteEditorForm() {
     return () => { isMounted = false; };
   }, []);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // ⭐️ 에디터에서 사진을 첨부할 때 가로채서 실행될 이미지 업로드 함수
+  const handleImageUpload = async (file: File): Promise<string> => {
     if (!file.type.startsWith("image/")) {
-      return alert("이미지 파일만 업로드할 수 있습니다.");
+      alert("이미지 파일만 업로드할 수 있습니다.");
+      throw new Error("Invalid file type");
     }
-
-    setIsUploadingImage(true);
 
     try {
       const { data: { session }, error: authError } = await supabase.auth.getSession();
       if (authError || !session?.user) {
-        throw new Error("유저 인증 정보가 없습니다. 새로고침 후 다시 로그인해주세요.");
+        alert("유저 인증 정보가 없습니다. 새로고침 후 다시 로그인해주세요.");
+        throw new Error("Unauthenticated");
       }
 
       const fileExt = file.name.split('.').pop();
       const fileName = `${session.user.id}/${Date.now()}_${Math.floor(Math.random() * 1000)}.${fileExt}`;
 
+      // Supabase Storage에 업로드
       const { error: uploadError } = await supabase.storage
         .from("post_images")
         .upload(fileName, file);
 
-      if (uploadError) throw new Error(`스토리지 에러: ${uploadError.message}`);
+      if (uploadError) {
+        alert(`스토리지 에러: ${uploadError.message}`);
+        throw uploadError;
+      }
 
+      // 업로드된 이미지의 공개 URL 가져오기
       const { data: { publicUrl } } = supabase.storage
         .from("post_images")
         .getPublicUrl(fileName);
 
-      setContent((prev: string) => prev + `\n![이미지](${publicUrl})\n`);
+      // ⭐️ URL을 반환하면 에디터가 알아서 본문에 이미지를 예쁘게 띄워줍니다!
+      return publicUrl;
       
     } catch (error: any) {
-      alert(`[업로드 실패] ${error.message}`);
-    } finally {
-      setIsUploadingImage(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      console.error("이미지 업로드 실패:", error);
+      throw error;
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !user.id) return alert("사용자 인증 정보를 불러오지 못했습니다.");
-    if (!title.trim() || !content.trim()) return alert("제목과 내용을 입력해주세요.");
+    if (!title.trim() || !content.trim()) return alert("제목과 내용을 모두 입력해주세요.");
     
     setIsSubmitting(true);
     try {
       const finalTitle = subCategory ? `[${subCategory}] ${title}` : title;
       const { error } = await supabase.from("posts").insert([{
-        title: finalTitle, content: content, board_type: boardName, author_id: user.id, author_email: user.email,
+        title: finalTitle, 
+        content: content, 
+        board_type: boardName, 
+        author_id: user.id, 
+        author_email: user.email,
       }]);
       if (error) throw error;
       
@@ -139,64 +142,19 @@ function WriteEditorForm() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] transition-colors flex flex-col">
-          
-          {/* ⭐️ 에디터 / 미리보기 탭 추가 */}
-          <div className="flex items-center justify-between border-b-2 border-[#222222] dark:border-[#444444] bg-[#F5F4F0] dark:bg-[#2A2A2A] px-4">
-            <div className="flex gap-4">
-              <button 
-                type="button" 
-                onClick={() => setIsPreview(false)} 
-                className={`py-3 text-sm font-black transition-colors ${!isPreview ? "text-blue-600 border-b-2 border-blue-600" : "text-[#A0A0A0] hover:text-[#222222]"}`}
-              >
-                에디터 (작성)
-              </button>
-              <button 
-                type="button" 
-                onClick={() => setIsPreview(true)} 
-                className={`py-3 text-sm font-black transition-colors ${isPreview ? "text-blue-600 border-b-2 border-blue-600" : "text-[#A0A0A0] hover:text-[#222222]"}`}
-              >
-                미리보기
-              </button>
-            </div>
-
-            {/* 툴바 (에디터 모드일 때만 보임) */}
-            {!isPreview && (
-              <div className="flex flex-wrap items-center gap-2 py-2">
-                <button type="button" className="w-8 h-8 flex items-center justify-center text-[#666666] hover:bg-[#E5E4E0] hover:text-[#222222] rounded-sm transition-colors"><span className="material-symbols-outlined text-[18px]">format_bold</span></button>
-                <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage} className="w-8 h-8 flex items-center justify-center text-[#666666] hover:bg-[#E5E4E0] hover:text-[#222222] rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" title="이미지 첨부">
-                  {isUploadingImage ? <span className="animate-spin material-symbols-outlined text-[18px]">sync</span> : <span className="material-symbols-outlined text-[18px]">image</span>}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="relative min-h-[400px]">
-            {/* ⭐️ 미리보기 모드일 때는 ReactMarkdown 컴포넌트로 렌더링 */}
-            {isPreview ? (
-              <div className="absolute inset-0 w-full h-full p-6 overflow-y-auto bg-transparent text-[#222222] dark:text-[#EAEAEA] prose prose-sm max-w-none dark:prose-invert prose-img:max-w-full prose-img:rounded-md prose-img:border-2 prose-img:border-[#222222]">
-                {content ? (
-                  <ReactMarkdown>{content}</ReactMarkdown>
-                ) : (
-                  <p className="text-[#A0A0A0] italic">미리볼 내용이 없습니다.</p>
-                )}
-              </div>
-            ) : (
-              <textarea 
-                value={content} 
-                onChange={(e) => setContent(e.target.value)} 
-                className="absolute inset-0 w-full h-full p-6 bg-transparent font-medium text-[#222222] dark:text-[#EAEAEA] outline-none resize-none leading-relaxed placeholder-[#A0A0A0]" 
-                placeholder="내용을 작성해주세요. 마크다운(Markdown) 형식을 지원하며, 사진 아이콘을 눌러 이미지를 첨부할 수 있습니다." 
-                required 
-              />
-            )}
-          </div>
+        {/* ⭐️ 복잡했던 textarea와 탭들을 걷어내고 에디터 컴포넌트 하나로 통합! */}
+        <div className="shadow-[8px_8px_0px_#222222] transition-colors">
+          <TuiEditorWrapper 
+  editorRef={editorRef}
+  initialValue=""
+  onChange={(newContent: string) => setContent(newContent)}
+  onImageUpload={handleImageUpload}
+/>
         </div>
 
         <div className="flex items-center justify-between pt-6 border-t-4 border-[#222222] dark:border-[#444444]">
           <Link href="/community" className="px-6 py-3 font-bold text-[#666666] hover:text-[#222222] transition-colors">취소</Link>
-          <button type="submit" disabled={isSubmitting || isUploadingImage} className="bg-[#222222] text-[#F5F4F0] border-2 border-[#222222] px-10 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+          <button type="submit" disabled={isSubmitting} className="bg-[#222222] text-[#F5F4F0] border-2 border-[#222222] px-10 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center gap-2 disabled:opacity-50">
             {isSubmitting ? <span className="animate-spin material-symbols-outlined">sync</span> : null}
             {isSubmitting ? "등록 중..." : "등록하기"}
           </button>

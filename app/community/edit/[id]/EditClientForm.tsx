@@ -98,7 +98,7 @@ export default function EditClientForm({ initialData, postId }: { initialData: a
     
     try {
       // ⭐️ 클라이언트에서 DB를 만지지 않고 서버 액션(updatePost)을 호출합니다!
-      const result = await updatePost(postId, finalTitle, content, boardName);
+      const result = await updatePost(postId, finalTitle, content, boardName, subCategory, false);
 
       if (result.success) {
         alert(result.message);

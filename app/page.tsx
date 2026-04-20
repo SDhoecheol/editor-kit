@@ -24,6 +24,7 @@ export default async function Home() {
       created_at, 
       board_type,
       view_count,
+      is_resolved,
       comments (id)
     `)
     .order("created_at", { ascending: false })
@@ -32,11 +33,11 @@ export default async function Home() {
   // 데이터 안전망 처리
   const posts: any[] = postsData || [];
 
-  // 카테고리별로 데이터 분류
+  // 카테고리별로 데이터 분류 (각 5개씩)
   const notices = posts.filter(p => p.board_type === "공지사항").slice(0, 5);
   const freePosts = posts.filter(p => p.board_type === "자유게시판").slice(0, 5);
-  const qaPosts = posts.filter(p => p.board_type === "Q&A").slice(0, 8);
-  const portfolioPosts = posts.filter(p => p.board_type === "포트폴리오").slice(0, 6);
+  const qaPosts = posts.filter(p => p.board_type === "Q&A").slice(0, 5);
+  const portfolioPosts = posts.filter(p => p.board_type === "포트폴리오").slice(0, 5);
 
   return (
     <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-10 grid grid-cols-1 lg:grid-cols-4 gap-8 transition-colors duration-300">
@@ -139,7 +140,8 @@ export default async function Home() {
                     <Link key={post.id} href={`/community/${post.id}`} className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#262626] transition-colors flex justify-between items-center group flex-1">
                       <div className="flex items-center gap-2 overflow-hidden flex-1 pr-4">
                         <span className="w-1 h-1 rounded-full bg-[#A0A0A0] shrink-0"></span>
-                        <span className="text-[13px] font-bold text-[#222222] dark:text-[#EAEAEA] truncate group-hover:underline underline-offset-2">
+                        <span className="text-[13px] font-bold text-[#222222] dark:text-[#EAEAEA] truncate group-hover:underline underline-offset-2 flex items-center gap-1">
+                          {post.is_resolved && <span className="text-[9px] bg-blue-600 text-white px-1 py-0.5 rounded-sm font-black tracking-widest shrink-0">해결</span>}
                           {post.title}
                         </span>
                       </div>

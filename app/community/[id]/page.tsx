@@ -71,7 +71,12 @@ export default async function CommunityDetailPage({
               {post.board_type.replace("게시판", "").substring(0, 2)}
             </span>
           </div>
-          <h2 className="text-2xl md:text-3xl font-black text-[#222222] dark:text-[#EAEAEA] leading-snug">
+          <h2 className="text-2xl md:text-3xl font-black text-[#222222] dark:text-[#EAEAEA] leading-snug flex items-center gap-2">
+            {post.is_resolved && (
+              <span className="bg-blue-600 text-white text-sm px-2 py-1 font-black whitespace-nowrap shadow-[2px_2px_0px_#222222] border-2 border-[#222222] dark:border-transparent">
+                해결됨
+              </span>
+            )}
             {post.title}
           </h2>
         </div>
@@ -112,7 +117,13 @@ export default async function CommunityDetailPage({
       <PostActions postId={postId} authorId={post.author_id} />
 
       {/* ⭐️ 댓글 섹션 (클라이언트 컴포넌트) */}
-      <CommentSection postId={postId} initialComments={comments || []} />
+      <CommentSection 
+        postId={postId} 
+        initialComments={comments || []} 
+        boardType={post.board_type}
+        postAuthorId={post.author_id}
+        isResolved={post.is_resolved}
+      />
 
     </div>
   );

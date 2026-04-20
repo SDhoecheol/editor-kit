@@ -6,19 +6,43 @@ import { supabase } from '../lib/supabase';
 export default function LoginButton() {
   // 유저 정보를 기억해둘 공간(state)을 만듭니다. 처음엔 아무도 없으니 null 입니다.
   const [user, setUser] = useState<any>(null);
+  const [isChecking, setIsChecking] = useState(true);
 
   // 화면이 켜질 때 수파베이스에게 "지금 로그인한 사람 있어?" 하고 물어보는 역할입니다.
   useEffect(() => {
-    // 1. 현재 로그인된 유저 정보 가져오기 (=> 를 = 로 수정했습니다!)
+    // 1. 현재 로그인된 유저 정보 가져오기 (3초 타임아웃 적용)
     const checkUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
+      try {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), 3000)
+        );
+
+        const getUserPromise = supabase.auth.getUser();
+
+        // 3초 안에 응답이 오지 않으면 Timeout 에러 발생
+        const { data } = (await Promise.race([getUserPromise, timeoutPromise])) as any;
+
+        if (data && data.user) {
+          setUser(data.user);
+        } else {
+          await supabase.auth.signOut({ scope: 'local' });
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("유저 정보 로딩 에러 또는 타임아웃:", error);
+        // 에러나 타임아웃 시 로컬 세션 청소 후 로그인 버튼 띄우기
+        await supabase.auth.signOut({ scope: 'local' });
+        setUser(null);
+      } finally {
+        setIsChecking(false);
+      }
     };
     checkUser();
 
     // 2. 누군가 로그인을 하거나 로그아웃을 하면 화면을 실시간으로 새로고침 해줍니다.
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null);
+      setIsChecking(false);
     });
 
     return () => {
@@ -31,7 +55,7 @@ export default function LoginButton() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}`,
+        redirectTo: `${location.origin}/auth/callback`,
       },
     });
   };
@@ -40,6 +64,15 @@ export default function LoginButton() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
+
+  // ⭐️ 정보 확인 중 상태 렌더링
+  if (isChecking) {
+    return (
+      <div className="px-4 py-2 font-bold text-gray-500 bg-gray-100 rounded-lg">
+        정보 확인 중...
+      </div>
+    );
+  }
 
   // ⭐️ 만약 유저가 로그인 되어 있다면? (유저 정보가 있다면 이 화면을 보여줍니다)
   if (user) {

@@ -27,25 +27,9 @@ function WriteEditorForm() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState<string>(""); // 에디터 내용을 담을 상태
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [user, setUser] = useState<any>(null);
 
   // ⭐️ Toast UI Editor 인스턴스를 조작하기 위한 Ref
   const editorRef = useRef<any>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    const fetchUser = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (session?.user && isMounted) setUser(session.user);
-      } catch (error) {
-        console.error("유저 정보 로딩 에러:", error);
-      }
-    };
-    fetchUser();
-    return () => { isMounted = false; };
-  }, []);
 
   // ⭐️ 에디터에서 사진을 첨부할 때 가로채서 실행될 이미지 업로드 함수
   const handleImageUpload = async (file: File): Promise<string> => {
@@ -55,14 +39,16 @@ function WriteEditorForm() {
     }
 
     try {
-      const { data: { session }, error: authError } = await supabase.auth.getSession();
-      if (authError || !session?.user) {
-        alert("유저 인증 정보가 없습니다. 새로고침 후 다시 로그인해주세요.");
+      // getSession()이 아닌 getUser()를 사용하여 실제 서버와 토큰 검증
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        alert("로그인이 필요합니다.");
+        window.location.href = "/login";
         throw new Error("Unauthenticated");
       }
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${session.user.id}/${Date.now()}_${Math.floor(Math.random() * 1000)}.${fileExt}`;
+      const fileName = `${user.id}/${Date.now()}_${Math.floor(Math.random() * 1000)}.${fileExt}`;
 
       // Supabase Storage에 업로드
       const { error: uploadError } = await supabase.storage
@@ -90,26 +76,46 @@ function WriteEditorForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !user.id) return alert("사용자 인증 정보를 불러오지 못했습니다.");
+    
+    // 전송 순간에 유저 상태를 최신으로 가져옵니다 (로컬 상태 엇갈림 방지)
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      alert("로그인이 필요합니다.");
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!subCategory) return alert("해당 게시판 전용 말머리를 반드시 선택해주세요.");
     if (!title.trim() || !content.trim()) return alert("제목과 내용을 모두 입력해주세요.");
     
     setIsSubmitting(true);
     try {
       const finalTitle = subCategory ? `[${subCategory}] ${title}` : title;
-      const { error } = await supabase.from("posts").insert([{
-        title: finalTitle, 
-        content: content, 
-        board_type: boardName, 
-        author_id: user.id, 
-        author_email: user.email,
-      }]);
-      if (error) throw error;
       
-      alert(`[${boardName}] 게시글이 성공적으로 등록되었습니다.`);
+      // 서버 액션을 통한 안전한 글 작성 및 잉크 보상 처리
+      const { createPost } = await import("../actions");
+      const result = await createPost(
+        finalTitle, 
+        content, 
+        boardName, 
+        subCategory, // 말머리 (prefix)
+        false // 익명 여부 (현재 UI에 없으므로 기본값 false 적용)
+      );
+
+      if (!result.success) {
+        if (result.message === "로그인이 필요합니다.") {
+          alert("로그인이 필요합니다.");
+          window.location.href = "/login";
+          return;
+        }
+        throw new Error(result.message);
+      }
+      
+      alert(result.message || `[${boardName}] 게시글이 성공적으로 등록되었습니다.`);
       router.refresh(); 
       router.push("/community");
     } catch (error: any) {
-      alert("글을 등록하는 중 문제가 발생했습니다.");
+      alert(error.message || "글을 등록하는 중 문제가 발생했습니다.");
     } finally {
       setIsSubmitting(false); 
     } 
@@ -119,10 +125,12 @@ function WriteEditorForm() {
     <div className="max-w-5xl mx-auto px-6 py-12 md:py-20 space-y-8">
       <header className="border-b-4 border-[#222222] dark:border-[#444444] pb-6 flex flex-col gap-2">
         <div className="flex items-center gap-3">
-          <span className="bg-[#222222] text-[#F5F4F0] dark:bg-[#333333] dark:text-[#EAEAEA] px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">에디터킷 라운지</span>
-          <span className="text-xs font-bold text-[#A0A0A0] dark:text-[#666666] tracking-widest">새 게시글 작성</span>
+          <span className="bg-blue-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase border-2 border-[#222222] dark:border-transparent">
+            에디터킷 라운지
+          </span>
+          <span className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0] tracking-widest">새 게시글 작성</span>
         </div>
-        <h1 className="text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight flex items-center gap-3">
+        <h1 className="text-4xl md:text-5xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight flex items-center gap-3 mt-2">
           <span className="text-blue-600 dark:text-blue-400">{boardName}</span>
           <span>글쓰기</span>
         </h1>
@@ -130,33 +138,35 @@ function WriteEditorForm() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="shrink-0 md:w-48 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] transition-colors relative">
-            <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full h-full px-4 py-3.5 bg-transparent font-bold text-[#222222] dark:text-[#EAEAEA] outline-none appearance-none cursor-pointer">
-              <option value="">말머리 (선택)</option>
+          <div className="shrink-0 md:w-48 bg-white dark:bg-[#1E1E1E] border-4 border-[#222222] dark:border-[#444444] shadow-[6px_6px_0px_#222222] dark:shadow-[6px_6px_0px_#111111] transition-all relative group focus-within:translate-x-[2px] focus-within:translate-y-[2px] focus-within:shadow-[4px_4px_0px_#222222] dark:focus-within:shadow-[4px_4px_0px_#111111]">
+            <select value={subCategory} onChange={(e) => setSubCategory(e.target.value)} className="w-full h-full px-4 py-4 bg-transparent font-black text-[#222222] dark:text-[#EAEAEA] outline-none appearance-none cursor-pointer" required>
+              <option value="" disabled hidden>말머리 (필수)</option>
               {subCats.map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
-            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#A0A0A0]">expand_more</span>
+            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#222222] dark:text-[#EAEAEA] font-black group-hover:translate-y-0 transition-transform">expand_more</span>
           </div>
-          <div className="flex-1 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] transition-colors">
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력하세요." className="w-full h-full px-4 py-3.5 bg-transparent font-black text-[#222222] dark:text-[#EAEAEA] outline-none placeholder-[#A0A0A0]" required />
+          <div className="flex-1 bg-white dark:bg-[#1E1E1E] border-4 border-[#222222] dark:border-[#444444] shadow-[6px_6px_0px_#222222] dark:shadow-[6px_6px_0px_#111111] transition-all focus-within:translate-x-[2px] focus-within:translate-y-[2px] focus-within:shadow-[4px_4px_0px_#222222] dark:focus-within:shadow-[4px_4px_0px_#111111]">
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목을 입력하세요." className="w-full h-full px-5 py-4 bg-transparent font-black text-lg text-[#222222] dark:text-[#EAEAEA] outline-none placeholder-[#A0A0A0]" required />
           </div>
         </div>
 
         {/* ⭐️ 복잡했던 textarea와 탭들을 걷어내고 에디터 컴포넌트 하나로 통합! */}
-        <div className="shadow-[8px_8px_0px_#222222] transition-colors">
+        <div className="border-4 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] transition-colors bg-white dark:bg-[#1E1E1E]">
           <TuiEditorWrapper 
-  editorRef={editorRef}
-  initialValue=""
-  onChange={(newContent: string) => setContent(newContent)}
-  onImageUpload={handleImageUpload}
-/>
+            editorRef={editorRef}
+            initialValue=""
+            onChange={(newContent: string) => setContent(newContent)}
+            onImageUpload={handleImageUpload}
+          />
         </div>
 
-        <div className="flex items-center justify-between pt-6 border-t-4 border-[#222222] dark:border-[#444444]">
-          <Link href="/community" className="px-6 py-3 font-bold text-[#666666] hover:text-[#222222] transition-colors">취소</Link>
-          <button type="submit" disabled={isSubmitting} className="bg-[#222222] text-[#F5F4F0] border-2 border-[#222222] px-10 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-            {isSubmitting ? <span className="animate-spin material-symbols-outlined">sync</span> : null}
-            {isSubmitting ? "등록 중..." : "등록하기"}
+        <div className="flex items-center justify-between pt-8 border-t-4 border-[#222222] dark:border-[#444444]">
+          <Link href="/community" className="px-6 py-3 font-black text-[#666666] hover:text-[#222222] dark:hover:text-[#EAEAEA] transition-colors flex items-center gap-1">
+            <span className="material-symbols-outlined text-[20px]">arrow_back</span> 취소
+          </Link>
+          <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white border-4 border-[#222222] dark:border-transparent px-10 py-4 font-black shadow-[6px_6px_0px_#222222] dark:shadow-[6px_6px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_#222222] dark:hover:shadow-[4px_4px_0px_#111111] transition-all flex items-center justify-center gap-2 text-lg disabled:opacity-50">
+            {isSubmitting ? <span className="animate-spin material-symbols-outlined">sync</span> : <span className="material-symbols-outlined">send</span>}
+            {isSubmitting ? "등록 중..." : "글 등록하기"}
           </button>
         </div>
       </form>

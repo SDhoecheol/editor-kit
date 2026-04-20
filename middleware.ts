@@ -16,7 +16,14 @@ export async function middleware(request: NextRequest) {
   if (isProtectedRoute && !user) {
     // 로그인이 안 되어 있다면 로그인 창으로 튕겨냄
     url.pathname = '/login';
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    
+    // ⭐️ 중요: 쿠키 충돌 방지. 만료된 토큰을 지우는 등 서버에서 처리한 쿠키 변경사항을 리다이렉트 응답에도 무조건 복사합니다.
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    });
+
+    return redirectResponse;
   }
 
   // 3. [로그인 유저 접근 금지 구역] 설정
@@ -26,7 +33,14 @@ export async function middleware(request: NextRequest) {
   if (isAuthRoute && user) {
     // 이미 로그인한 사람이 로그인/가입 페이지에 접근하면 메인 홈으로 튕겨냄
     url.pathname = '/';
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    
+    // ⭐️ 갱신된 세션 쿠키가 날아가지 않도록 리다이렉트 응답에 복사
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    });
+
+    return redirectResponse;
   }
 
   // 4. 아무 문제가 없다면 정상적으로 페이지 접근 허용

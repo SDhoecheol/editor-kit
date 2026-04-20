@@ -13,13 +13,37 @@ const Editor = dynamic(
 // 2. CSS 파일을 임포트합니다. (글로벌하게 적용)
 import '@toast-ui/editor/dist/toastui-editor.css';
 
+// 확장된 Props 인터페이스 (onImageUpload 커스텀 이벤트 추가)
+interface TuiEditorWrapperProps extends EditorProps {
+  onImageUpload?: (blob: File) => Promise<string>;
+}
+
 // 3. 부모 컴포넌트에서 에디터의 인스턴스에 접근할 수 있도록 forwardRef를 사용합니다.
-const TuiEditorWrapper = forwardRef<any, EditorProps>((props, ref) => {
+const TuiEditorWrapper = forwardRef<any, TuiEditorWrapperProps>((props, ref) => {
+  const { onImageUpload, hooks, ...rest } = props;
+
+  // ⭐️ 에디터 이미지 업로드 훅 연결 로직
+  const customHooks = {
+    ...hooks,
+    addImageBlobHook: async (blob: Blob | File, callback: (url: string, text: string) => void) => {
+      if (onImageUpload) {
+        try {
+          const url = await onImageUpload(blob as File);
+          callback(url, "이미지");
+        } catch (error) {
+          console.error("이미지 업로드 실패:", error);
+          alert("이미지 업로드에 실패했습니다.");
+        }
+      }
+    }
+  };
+
   return (
     <div className="tui-editor-wrapper bg-white dark:bg-[#1E1E1E]">
       <Editor 
-        {...props} 
+        {...rest} 
         ref={ref} 
+        hooks={customHooks}
         language="ko-KR" // 한국어 설정
       />
       

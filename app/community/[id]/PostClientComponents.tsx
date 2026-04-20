@@ -122,7 +122,19 @@ export function LikeButton({ postId, initialLikes }: { postId: string, initialLi
 }
 
 // 4. 댓글 섹션 (폼 + 리스트)
-export function CommentSection({ postId, initialComments }: { postId: string, initialComments: any[] }) {
+export function CommentSection({ 
+  postId, 
+  initialComments,
+  boardType,
+  postAuthorId,
+  isResolved
+}: { 
+  postId: string, 
+  initialComments: any[],
+  boardType?: string,
+  postAuthorId?: string,
+  isResolved?: boolean
+}) {
   const [comments, setComments] = useState(initialComments);
   const [commentInput, setCommentInput] = useState("");
   const [user, setUser] = useState<any>(null);
@@ -139,14 +151,35 @@ export function CommentSection({ postId, initialComments }: { postId: string, in
 
     setIsSubmitting(true);
     try {
-      const { data: newComment, error } = await supabase.from("comments").insert([{ post_id: postId, author_id: user.id, content: commentInput }]).select(`id, content, created_at, author_id, profiles:author_id (nickname)`).single();
-      if (error) throw error;
-      setComments([...comments, newComment]);
+      const { createComment } = await import("../actions");
+      const result = await createComment(postId, commentInput);
+      
+      if (!result.success) throw new Error(result.message);
+      
+      setComments([...comments, result.comment]);
       setCommentInput("");
-    } catch (error) {
-      alert("댓글 등록에 실패했습니다.");
+      // UI를 안 건드리기로 했으므로 얼럿은 생략하거나 메시지만 띄움
+    } catch (error: any) {
+      alert(error.message || "댓글 등록에 실패했습니다.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResolve = async (commentAuthorId: string) => {
+    if (confirm("이 답변을 채택하시겠습니까? (채택 후 취소할 수 없습니다)")) {
+      try {
+        const { resolvePost } = await import("../actions");
+        const result = await resolvePost(postId, postAuthorId!, commentAuthorId);
+        if (result.success) {
+          alert(result.message);
+          window.location.reload(); // 새로고침하여 해결됨 상태 갱신
+        } else {
+          alert(result.message);
+        }
+      } catch (error: any) {
+        alert(error.message || "채택 처리 중 오류가 발생했습니다.");
+      }
     }
   };
 
@@ -165,6 +198,14 @@ export function CommentSection({ postId, initialComments }: { postId: string, in
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-[#222222] dark:text-[#EAEAEA] text-sm">{comment.profiles?.nickname || "익명"}</span>
+                {boardType === "Q&A" && user?.id === postAuthorId && !isResolved && (
+                  <button 
+                    onClick={() => handleResolve(comment.author_id)}
+                    className="ml-2 px-2 py-0.5 text-[10px] font-black bg-white dark:bg-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] text-[#222222] dark:text-[#EAEAEA] hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-colors shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#EAEAEA] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+                  >
+                    채택하기
+                  </button>
+                )}
               </div>
               <span className="text-[11px] font-bold text-[#A0A0A0]">
                 {new Date(comment.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}

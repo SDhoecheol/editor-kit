@@ -48,7 +48,22 @@ export default async function CommunityPage({
   }
 
   const { data: posts, error } = await query.limit(20);
-  const displayPosts: any[] = posts || [];
+  
+  // ⭐️ 권한 체크 및 익명 블라인드 처리
+  const { data: { user } } = await supabase.auth.getUser();
+  let isAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role === 'admin' || profile?.role === 'manager') isAdmin = true;
+  }
+
+  // 익명게시판이거나 is_anonymous 플래그가 있는 경우 무조건 닉네임 덮어쓰기
+  const displayPosts: any[] = (posts || []).map(post => {
+    if (post.board_type === "익명게시판" || post.is_anonymous) {
+      return { ...post, profiles: { nickname: "ㅇㅇ(익명)" } };
+    }
+    return post;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-8">
@@ -68,13 +83,15 @@ export default async function CommunityPage({
             에디터킷 라운지
           </h1>
         </div>
-        
-        <Link 
-          href={`/community/write?board=${activeCat === '전체보기' ? '자유게시판' : activeCat}`}
-          className="bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-8 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#E5E4E0] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center justify-center gap-2 text-base shrink-0"
-        >
-          <span className="material-symbols-outlined text-[20px]">edit_square</span> 글쓰기
-        </Link>
+        {/* ⭐️ 공지사항 탭에서는 관리자(Admin/Manager)만 글쓰기 버튼 노출 */}
+        {!(activeCat === '공지사항' && !isAdmin) && (
+          <Link 
+            href={`/community/write?board=${activeCat === '전체보기' ? '자유게시판' : activeCat}`}
+            className="bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-8 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#E5E4E0] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center justify-center gap-2 text-base shrink-0"
+          >
+            <span className="material-symbols-outlined text-[20px]">edit_square</span> 글쓰기
+          </Link>
+        )}
       </header>
 
       {/* 2. 상단 카테고리 탭 */}
@@ -191,7 +208,7 @@ export default async function CommunityPage({
                     </td>
                     
                     <td className="py-4 text-xs font-bold text-[#666666] dark:text-[#A0A0A0] truncate px-2">
-                      {post.board_type === "익명게시판" ? "ㅇㅇ(익명)" : (
+                      {post.board_type === "익명게시판" || post.is_anonymous ? "ㅇㅇ(익명)" : (
                         <div className="flex items-center justify-center gap-1">
                           {post.profiles?.nickname || "알수없음"}
                           <span className="bg-[#222222] dark:bg-[#EAEAEA] text-[#F5F4F0] dark:text-[#121212] px-1 text-[8px] rounded-sm font-black">

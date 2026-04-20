@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { ViewTracker, PostActions, LikeButton, CommentSection } from "./PostClientComponents"; // ⭐️ 클라이언트 컴포넌트 불러오기
+import TuiViewerWrapper from "@/components/TuiViewerWrapper";
 
 const formatDateTime = (dateString: string) => {
   const d = new Date(dateString);
@@ -21,6 +23,19 @@ export default async function CommunityDetailPage({
   const resolvedParams = await params;
   const postId = resolvedParams.id;
 
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
   // 1. 게시글 데이터 가져오기 (서버)
   const { data: post, error: postError } = await supabase
     .from("posts")
@@ -35,9 +50,11 @@ export default async function CommunityDetailPage({
   // 2. 댓글 데이터 가져오기 (서버)
   const { data: comments } = await supabase
     .from("comments")
-    .select(`id, content, created_at, author_id, profiles:author_id (nickname)`)
+    .select(`id, content, created_at, author_id, parent_id, profiles:author_id (nickname)`)
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
+
+  const { data: { user } } = await supabase.auth.getUser();
 
   // 3. 좋아요 수 가져오기 (서버)
   const { count: likesCount } = await supabase
@@ -105,12 +122,12 @@ export default async function CommunityDetailPage({
           </div>
         </div>
 
-        <div className="p-8 min-h-[300px] text-[15px] leading-relaxed text-[#222222] dark:text-[#EAEAEA] font-medium whitespace-pre-wrap">
-          {post.content}
+        <div className="p-8 min-h-[300px] text-[15px] leading-relaxed text-[#222222] dark:text-[#EAEAEA] font-medium">
+          <TuiViewerWrapper initialValue={post.content} />
         </div>
 
         {/* ⭐️ 좋아요 버튼 (클라이언트 컴포넌트) */}
-        <LikeButton postId={postId} initialLikes={likesCount || 0} />
+        <LikeButton postId={postId} initialLikes={likesCount || 0} initialUser={user} />
       </div>
 
       {/* ⭐️ 작성자 전용 액션 (클라이언트 컴포넌트) */}
@@ -123,6 +140,7 @@ export default async function CommunityDetailPage({
         boardType={post.board_type}
         postAuthorId={post.author_id}
         isResolved={post.is_resolved}
+        initialUser={user}
       />
 
     </div>

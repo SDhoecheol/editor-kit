@@ -3,7 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import SessionTimeout from "@/components/SessionTimeout";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -12,11 +13,30 @@ export const metadata: Metadata = {
   description: "인쇄, 디자인 실무자들을 위한 유틸리티 및 커뮤니티 공간입니다.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  let profile = null;
+  if (user) {
+    const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    profile = data;
+  }
   return (
     <html lang="ko" suppressHydrationWarning>
       <head>
@@ -30,9 +50,8 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Navbar />
+          <Navbar initialUser={user} initialProfile={profile} />
           {children}
-          <SessionTimeout />
         </ThemeProvider>
       </body>
     </html>

@@ -89,7 +89,7 @@ export async function createPost(
 }
 
 // --- ⭐️ 댓글 작성 서버 액션 (+5 잉크) ---
-export async function createComment(postId: string, content: string) {
+export async function createComment(postId: string, content: string, parentId?: string) {
   const supabase = await getSupabase();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -98,11 +98,14 @@ export async function createComment(postId: string, content: string) {
   }
 
   // 1. 댓글 삽입
-  const { data: comment, error: insertError } = await supabase.from("comments").insert([{
+  const payload: any = {
     post_id: postId,
     content,
     author_id: user.id,
-  }]).select(`id, content, created_at, author_id, profiles:author_id (nickname)`).single();
+  };
+  if (parentId) payload.parent_id = parentId;
+
+  const { data: comment, error: insertError } = await supabase.from("comments").insert([payload]).select(`id, content, created_at, author_id, parent_id, profiles:author_id (nickname)`).single();
 
   if (insertError || !comment) {
     console.error("댓글 등록 실패:", insertError);
@@ -243,4 +246,26 @@ export async function resolvePost(postId: string, questionerId: string, answerer
   revalidatePath("/mypage");
 
   return { success: true, message: "답변이 채택되었습니다! 질문자와 답변자에게 각각 100 Ink가 지급되었습니다." };
+}
+
+// --- ⭐️ 프로필 수정 서버 액션 ---
+export async function updateProfile(nickname: string, roleTag: string) {
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, message: "로그인이 필요합니다." };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ nickname, role_tag: roleTag })
+    .eq("id", user.id);
+
+  if (error) {
+    console.error("프로필 수정 실패:", error);
+    return { success: false, message: "프로필 수정에 실패했습니다." };
+  }
+
+  revalidatePath("/mypage");
+  revalidatePath("/");
+  return { success: true, message: "프로필이 성공적으로 수정되었습니다." };
 }

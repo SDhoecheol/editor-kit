@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import { ProfileWidget } from "./HomeClientComponents"; // ⭐️ 클라이언트 컴포넌트로 분리한 프로필 위젯 불러오기
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { ProfileWidget } from "./HomeClientComponents";
 
 export const dynamic = 'force-dynamic';
 // 날짜 변환 함수 (예: 04.15)
@@ -13,9 +14,28 @@ const formatDate = (dateString: string) => {
 
 // ⭐️ "use client" 제거! 완벽한 서버 컴포넌트(SSR) 적용
 export default async function Home() {
-  
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
+  // ⭐️ 유저 정보 서버 패치 (위젯용)
+  const { data: { user } } = await supabase.auth.getUser();
+  let profile = null;
+  if (user) {
+    const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    profile = data;
+  }
+
   // ⭐️ 1. 게시글 리스트 패치 (서버에서 최신 100개를 가져와서 카테고리별로 나눔)
-  // 조회수(view_count)와 달린 댓글 개수(comments)까지 한 번의 쿼리로 가져옵니다.
   const { data: postsData } = await supabase
     .from("posts")
     .select(`
@@ -24,7 +44,6 @@ export default async function Home() {
       created_at, 
       board_type,
       view_count,
-      is_resolved,
       comments (id)
     `)
     .order("created_at", { ascending: false })
@@ -190,8 +209,8 @@ export default async function Home() {
       {/* 우측 사이드바 영역 */}
       <aside className="hidden lg:flex flex-col gap-6">
         
-        {/* ⭐️ 사용자 로그인 상태를 확인하는 클라이언트 컴포넌트 마운트 */}
-        <ProfileWidget />
+        {/* ⭐️ 사용자 로그인 상태를 서버에서 미리 받아와 넘겨줌 */}
+        <ProfileWidget initialUser={user} initialProfile={profile} />
 
         <div>
           <h3 className="font-black text-sm uppercase tracking-widest border-b-2 border-[#E5E4E0] dark:border-[#333333] pb-2 mb-4 dark:text-[#EAEAEA]">

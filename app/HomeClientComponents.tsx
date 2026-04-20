@@ -4,41 +4,22 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
-export function ProfileWidget() {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [isChecking, setIsChecking] = useState(true);
+export function ProfileWidget({ initialUser, initialProfile }: { initialUser?: any, initialProfile?: any }) {
+  const [user, setUser] = useState<any>(initialUser || null);
+  const [profile, setProfile] = useState<any>(initialProfile || null);
+  const [isChecking, setIsChecking] = useState(false); // 서버에서 데이터를 받았으므로 바로 false로 시작
+
+  // ⭐️ 서버 상태가 변경되면 즉각 동기화
+  useEffect(() => {
+    setUser(initialUser || null);
+    setProfile(initialProfile || null);
+  }, [initialUser, initialProfile]);
 
   useEffect(() => {
     let isMounted = true;
-    
-    const fetchUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (isMounted) setUser(session?.user || null);
 
-        if (session?.user) {
-          const { data } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-            
-          if (data) {
-            if (isMounted) setProfile(data);
-          } else {
-            // 프로필이 감지되지 않으면 웰컴 페이지로 강제 이동
-            window.location.href = "/welcome";
-          }
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        if (isMounted) setIsChecking(false);
-      }
-    };
-
-    fetchUser();
+    // 서버가 넘겨준 초기값(initialUser)을 절대적인 진실로 신뢰합니다.
+    // (이전에 있던 브라우저 로컬 스토리지 부활 로직은 좀비 세션 버그의 원인이 되므로 삭제)
 
     // 토큰 갱신 및 로그인 상태 변화 감지
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -96,7 +77,7 @@ export function ProfileWidget() {
             <div className="flex items-center justify-between bg-[#F5F4F0] dark:bg-[#121212] border border-[#E5E4E0] dark:border-[#333333] p-3 mb-4 transition-colors">
               <span className="text-sm font-bold text-[#666666] dark:text-[#A0A0A0]">보유 잉크</span>
               <span className="font-mono font-black text-lg text-[#222222] dark:text-[#EAEAEA]">
-                <span className="text-sm opacity-80">💧</span> {profile.ink_balance?.toLocaleString() || 0}
+                <span className="text-sm opacity-80">💧</span> {profile.ink?.toLocaleString() || 0}
               </span>
             </div>
 

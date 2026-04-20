@@ -10,28 +10,18 @@ export default function LoginButton() {
 
   // 화면이 켜질 때 수파베이스에게 "지금 로그인한 사람 있어?" 하고 물어보는 역할입니다.
   useEffect(() => {
-    // 1. 현재 로그인된 유저 정보 가져오기 (3초 타임아웃 적용)
+    // 1. 현재 로그인된 유저 정보 가져오기
     const checkUser = async () => {
       try {
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout")), 3000)
-        );
-
-        const getUserPromise = supabase.auth.getUser();
-
-        // 3초 안에 응답이 오지 않으면 Timeout 에러 발생
-        const { data } = (await Promise.race([getUserPromise, timeoutPromise])) as any;
+        const { data } = await supabase.auth.getUser();
 
         if (data && data.user) {
           setUser(data.user);
         } else {
-          await supabase.auth.signOut({ scope: 'local' });
           setUser(null);
         }
       } catch (error) {
-        console.error("유저 정보 로딩 에러 또는 타임아웃:", error);
-        // 에러나 타임아웃 시 로컬 세션 청소 후 로그인 버튼 띄우기
-        await supabase.auth.signOut({ scope: 'local' });
+        console.error("유저 정보 로딩 에러:", error);
         setUser(null);
       } finally {
         setIsChecking(false);

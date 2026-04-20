@@ -4,12 +4,37 @@ import { updateSession } from '@/lib/supabase/middleware';
 // ⭐️ Next.js가 반드시 찾고 있는 핵심 함수 이름입니다. (오타 주의!)
 export async function middleware(request: NextRequest) {
   // 1. 1단계에서 만든 유틸리티를 호출하여 세션 업데이트 및 유저 정보 가져오기
-  const { supabaseResponse, user } = await updateSession(request);
+  const { supabaseResponse, user, supabase } = await updateSession(request);
 
   const url = request.nextUrl.clone();
   const pathname = request.nextUrl.pathname;
 
-  // 2. [비로그인 유저 접근 금지 구역] 설정
+  // 2. 프로필 유무 확인 로직 (로그인했는데 프로필이 없다면 무조건 /welcome으로 강제 이동)
+  if (user) {
+    const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).single();
+    
+    // 프로필이 없고, 현재 접속하려는 곳이 /welcome이나 로그아웃이 아닐 경우
+    if (!profile && pathname !== '/welcome' && !pathname.startsWith('/auth/')) {
+      url.pathname = '/welcome';
+      const redirectResponse = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value);
+      });
+      return redirectResponse;
+    }
+
+    // 이미 프로필이 있는 사람이 /welcome에 접근하면 홈으로 튕겨냄
+    if (profile && pathname === '/welcome') {
+      url.pathname = '/';
+      const redirectResponse = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value);
+      });
+      return redirectResponse;
+    }
+  }
+
+  // 3. [비로그인 유저 접근 금지 구역] 설정
   const protectedRoutes = ['/mypage', '/community/write'];
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
 
@@ -18,7 +43,7 @@ export async function middleware(request: NextRequest) {
     url.pathname = '/login';
     const redirectResponse = NextResponse.redirect(url);
     
-    // ⭐️ 중요: 쿠키 충돌 방지. 만료된 토큰을 지우는 등 서버에서 처리한 쿠키 변경사항을 리다이렉트 응답에도 무조건 복사합니다.
+    // ⭐️ 중요: 쿠키 충돌 방지
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
     });
@@ -26,16 +51,15 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  // 3. [로그인 유저 접근 금지 구역] 설정
-  const authRoutes = ['/login', '/welcome'];
+  // 4. [로그인 유저 접근 금지 구역] 설정
+  const authRoutes = ['/login']; // welcome 제외
   const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
 
   if (isAuthRoute && user) {
-    // 이미 로그인한 사람이 로그인/가입 페이지에 접근하면 메인 홈으로 튕겨냄
+    // 이미 로그인한 사람이 로그인 페이지에 접근하면 메인 홈으로 튕겨냄
     url.pathname = '/';
     const redirectResponse = NextResponse.redirect(url);
     
-    // ⭐️ 갱신된 세션 쿠키가 날아가지 않도록 리다이렉트 응답에 복사
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
     });
@@ -43,7 +67,7 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  // 4. 아무 문제가 없다면 정상적으로 페이지 접근 허용
+  // 5. 아무 문제가 없다면 정상적으로 페이지 접근 허용
   return supabaseResponse;
 }
 

@@ -42,9 +42,7 @@ function WriteEditorForm() {
       // getSession()이 아닌 getUser()를 사용하여 실제 서버와 토큰 검증
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) {
-        alert("로그인이 필요합니다.");
-        window.location.href = "/login";
-        throw new Error("Unauthenticated");
+        throw new Error("로그인이 필요합니다.");
       }
 
       const fileExt = file.name.split('.').pop();
@@ -77,14 +75,6 @@ function WriteEditorForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 전송 순간에 유저 상태를 최신으로 가져옵니다 (로컬 상태 엇갈림 방지)
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      alert("로그인이 필요합니다.");
-      window.location.href = "/login";
-      return;
-    }
-
     if (!subCategory) return alert("해당 게시판 전용 말머리를 반드시 선택해주세요.");
     if (!title.trim() || !content.trim()) return alert("제목과 내용을 모두 입력해주세요.");
     
@@ -103,11 +93,6 @@ function WriteEditorForm() {
       );
 
       if (!result.success) {
-        if (result.message === "로그인이 필요합니다.") {
-          alert("로그인이 필요합니다.");
-          window.location.href = "/login";
-          return;
-        }
         throw new Error(result.message);
       }
       

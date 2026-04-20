@@ -6,14 +6,21 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-export default function Navbar() {
+export default function Navbar({ initialUser, initialProfile }: { initialUser?: any, initialProfile?: any }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const segment = useSelectedLayoutSegment();
   const router = useRouter();
 
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  // ⭐️ 초기 렌더링 시 서버에서 가져온 데이터를 바로 할당하여 깜빡임 방지
+  const [user, setUser] = useState<any>(initialUser || null);
+  const [profile, setProfile] = useState<any>(initialProfile || null);
+
+  // 서버의 상태가 갱신될 때마다 클라이언트 상태도 동기화
+  useEffect(() => {
+    setUser(initialUser || null);
+    setProfile(initialProfile || null);
+  }, [initialUser, initialProfile]);
 
   useEffect(() => {
     setMounted(true);
@@ -26,7 +33,7 @@ export default function Navbar() {
         // ⭐️ users가 아니라 profiles 테이블에서 가져오기!
         const { data, error } = await supabase
           .from("profiles")
-          .select("nickname, ink_balance")
+          .select("nickname, ink")
           .eq("id", session.user.id)
           .single();
         
@@ -53,17 +60,25 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = async () => {
+    // ⭐️ 즉시 UI를 비로그인 상태로 변경 (네비게이션 바 즉각 동기화)
     setUser(null);
     setProfile(null);
 
     try {
-      await fetch('/auth/logout', { method: 'POST' });
-    } catch(e) {
-      console.error(e);
+      // 서버 통신이 무한 대기에 빠지는 것을 막기 위해 타임아웃(0.8초) 추가
+      await Promise.race([
+        Promise.all([
+          fetch('/auth/logout', { method: 'POST' }),
+          supabase.auth.signOut()
+        ]),
+        new Promise(resolve => setTimeout(resolve, 800))
+      ]);
+    } catch (error) {
+      console.error("Logout Error:", error);
+    } finally {
+      // ⭐️ 무조건 홈으로 이동하며 물리적 새로고침 발생
+      window.location.href = "/";
     }
-    
-    await supabase.auth.signOut();
-    window.location.href = "/";
   };
 
   const getTabStyle = (targetSegment: string | null) => {
@@ -109,7 +124,7 @@ export default function Navbar() {
               {profile && (
                 <Link href="/mypage" className="hidden sm:flex items-center gap-1.5 bg-white dark:bg-[#121212] border-2 border-[#222222] dark:border-[#444444] px-3 py-1 font-mono text-sm font-black hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
                   <span className="text-[#222222] dark:text-[#EAEAEA]">💧</span> 
-                  <span className="text-[#222222] dark:text-[#EAEAEA]">{profile.ink_balance?.toLocaleString() || 0}</span>
+                  <span className="text-[#222222] dark:text-[#EAEAEA]">{profile.ink?.toLocaleString() || 0}</span>
                 </Link>
               )}
               

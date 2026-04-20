@@ -22,10 +22,17 @@ export default async function CommunityPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = await searchParams;
-  const activeCat = (resolvedParams.category as string) || "전체보기";
+  const activeCat = (resolvedParams.cat as string) || "전체보기";
   const sortType = (resolvedParams.sort as string) || "최신순";
+  
+  // ⭐️ 페이징 및 검색 파라미터 추가
+  const page = parseInt((resolvedParams.page as string) || "1", 10);
+  const searchKeyword = (resolvedParams.search as string) || "";
+  const ITEMS_PER_PAGE = 10;
+  const from = (page - 1) * ITEMS_PER_PAGE;
+  const to = from + ITEMS_PER_PAGE - 1;
 
-  // ⭐️ 쿼리 수정: view_count(조회수)와 comments(댓글 수)를 가져오도록 추가
+  // ⭐️ 쿼리 수정: is_anonymous 추가, count 포함
   let query = supabase
     .from("posts")
     .select(`
@@ -37,17 +44,27 @@ export default async function CommunityPage({
       view_count,
       comments(id),
       profiles:author_id (nickname)
-    `);
+    `, { count: "exact" });
 
   if (activeCat !== "전체보기") {
     query = query.eq("board_type", activeCat);
   }
 
-  if (sortType === "최신순") {
-    query = query.order("created_at", { ascending: false });
+  // 검색어 필터링
+  if (searchKeyword) {
+    query = query.ilike("title", `%${searchKeyword}%`);
   }
 
-  const { data: posts, error } = await query.limit(20);
+  // 정렬 처리
+  if (sortType === "최신순") {
+    query = query.order("created_at", { ascending: false });
+  } else if (sortType === "조회순") {
+    query = query.order("view_count", { ascending: false }).order("created_at", { ascending: false });
+  }
+
+  // ⭐️ 페이징 적용 (가짜 UI 연동용 데이터)
+  const { data: posts, error, count } = await query.range(from, to);
+  const totalPages = count ? Math.ceil(count / ITEMS_PER_PAGE) : 1;
   
   // ⭐️ 권한 체크 및 익명 블라인드 처리
   const { data: { user } } = await supabase.auth.getUser();
@@ -99,7 +116,7 @@ export default async function CommunityPage({
         {categories.map((cat) => (
           <Link 
             key={cat}
-            href={`/community?category=${cat}&sort=${sortType}`}
+            href={`/community?cat=${cat}&sort=${sortType}${searchKeyword ? `&search=${searchKeyword}` : ''}`}
             className={`whitespace-nowrap px-6 py-4 text-sm font-black transition-all border-b-4 -mb-[4px] flex items-center gap-2 ${
               activeCat === cat 
                 ? 'border-[#222222] dark:border-[#EAEAEA] text-[#222222] dark:text-[#EAEAEA]' 
@@ -115,14 +132,14 @@ export default async function CommunityPage({
       {/* 3. 리스트 상단 컨트롤 (정렬 필터) */}
       <div className="flex justify-between items-end pt-4">
         <span className="text-sm font-black text-[#222222] dark:text-[#EAEAEA]">
-          <span className="text-blue-600 dark:text-blue-400">{activeCat}</span> 게시물 ({displayPosts.length})
+          <span className="text-blue-600 dark:text-blue-400">{activeCat}</span> 게시물 ({count || 0})
         </span>
         
         <div className="flex border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111]">
           {["최신순", "조회순", "추천순"].map((sort) => (
             <Link 
               key={sort}
-              href={`/community?category=${activeCat}&sort=${sort}`}
+              href={`/community?cat=${activeCat}&sort=${sort}${searchKeyword ? `&search=${searchKeyword}` : ''}`}
               className={`px-3 py-1.5 text-xs font-bold border-r border-[#E5E4E0] dark:border-[#333333] last:border-0 transition-colors ${
                 sortType === sort ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'
               }`}

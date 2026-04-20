@@ -17,7 +17,7 @@ export async function POST() {
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options }); // 쿠키 폭파
+          cookieStore.delete({ name, ...options }); // 쿠키 완전 파기
         },
       },
     }

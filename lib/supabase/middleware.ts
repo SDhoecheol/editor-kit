@@ -36,6 +36,6 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 4. 미들웨어에서 라우팅 검사를 할 수 있도록 응답 객체와 유저 정보를 반환
-  return { supabaseResponse, user };
+  // 4. 미들웨어에서 라우팅 검사를 할 수 있도록 응답 객체와 유저 정보, supabase 클라이언트를 반환
+  return { supabaseResponse, user, supabase };
 }

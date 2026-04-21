@@ -269,3 +269,56 @@ export async function updateProfile(nickname: string, roleTag: string) {
   revalidatePath("/");
   return { success: true, message: "프로필이 성공적으로 수정되었습니다." };
 }
+
+// --- ⭐️ 조회수 증가 서버 액션 ---
+export async function incrementViewCount(postId: string) {
+  const supabase = await getSupabase();
+  
+  // 1. RPC 호출 (가장 권장되는 방법 - RLS 우회 가능)
+  const { error: rpcError } = await supabase.rpc('increment_view_count', { p_id: postId });
+  if (!rpcError) {
+    revalidatePath(`/community/${postId}`);
+    return { success: true };
+  }
+  
+  // 파라미터명 오류(post_id) 대응
+  const { error: rpcError2 } = await supabase.rpc('increment_view_count', { post_id: postId });
+  if (!rpcError2) {
+    revalidatePath(`/community/${postId}`);
+    return { success: true };
+  }
+
+  console.warn("RPC increment_view_count failed, falling back to JS query:", rpcError.message);
+  
+  // 2. 수동 업데이트 Fallback (RLS 설정에 따라 막힐 수 있음)
+  const { data: post } = await supabase.from('posts').select('view_count').eq('id', postId).single();
+  if (post) {
+    await supabase.from('posts').update({ view_count: (post.view_count || 0) + 1 }).eq('id', postId);
+  }
+  
+  revalidatePath(`/community/${postId}`);
+  revalidatePath("/community");
+  return { success: true };
+}
+
+// --- ⭐️ 추천(좋아요) 토글 서버 액션 ---
+export async function toggleLikeAction(postId: string) {
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { success: false, message: "로그인이 필요합니다." };
+
+  const { data: existingLike } = await supabase.from("likes").select("id").eq("post_id", postId).eq("user_id", user.id).maybeSingle();
+
+  if (existingLike) {
+    await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", user.id);
+  } else {
+    await supabase.from("likes").insert([{ post_id: postId, user_id: user.id }]);
+  }
+
+  // 좋아요가 변경되었으므로 즉각적으로 캐시를 비워서 추천수가 반영되게 함
+  revalidatePath(`/community/${postId}`);
+  revalidatePath("/community");
+  
+  return { success: true, liked: !existingLike };
+}

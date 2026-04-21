@@ -43,6 +43,7 @@ export default async function CommunityPage({
       author_id,
       view_count,
       comments(id),
+      likes(id),
       profiles:author_id (nickname)
     `, { count: "exact" });
 
@@ -62,8 +63,33 @@ export default async function CommunityPage({
     query = query.order("view_count", { ascending: false }).order("created_at", { ascending: false });
   }
 
-  // ⭐️ 페이징 적용 (가짜 UI 연동용 데이터)
-  const { data: posts, error, count } = await query.range(from, to);
+  // ⭐️ 페이징 및 추천순 정렬 적용
+  let posts: any[] = [];
+  let count = 0;
+  let error = null;
+
+  if (sortType === "추천순") {
+    // 추천순은 Supabase 조인 카운트 정렬 미지원으로 인해 JS 단에서 정렬 후 슬라이싱
+    const { data: allPosts, error: allErr, count: allCount } = await query;
+    error = allErr;
+    if (allPosts) {
+      count = allCount || 0;
+      const sorted = [...allPosts].sort((a, b) => {
+        const aLikes = a.likes?.length || 0;
+        const bLikes = b.likes?.length || 0;
+        if (bLikes !== aLikes) return bLikes - aLikes;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+      posts = sorted.slice(from, to + 1);
+    }
+  } else {
+    // 일반적인 DB 페이징
+    const res = await query.range(from, to);
+    posts = res.data || [];
+    error = res.error;
+    count = res.count || 0;
+  }
+  
   const totalPages = count ? Math.ceil(count / ITEMS_PER_PAGE) : 1;
   
   // ⭐️ 권한 체크 및 익명 블라인드 처리
@@ -180,7 +206,7 @@ export default async function CommunityPage({
                     <span className="material-symbols-outlined text-4xl text-[#A0A0A0] opacity-50 group-hover:opacity-100 transition-opacity">image</span>
                   </div>
                   <div className="absolute bottom-2 right-2 bg-[#222222] text-[#F5F4F0] text-[10px] font-bold px-1.5 py-0.5">
-                    <span className="material-symbols-outlined text-[10px] mr-0.5">favorite</span>0
+                    <span className="material-symbols-outlined text-[10px] mr-0.5">favorite</span>{post.likes?.length || 0}
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -204,6 +230,7 @@ export default async function CommunityPage({
                   <th className="py-3 w-32">작성자</th>
                   <th className="py-3 w-24">작성일</th>
                   <th className="py-3 w-16">조회</th>
+                  <th className="py-3 w-16">추천</th>
                   <th className="py-3 w-16">댓글</th>
                 </tr>
               </thead>
@@ -236,9 +263,11 @@ export default async function CommunityPage({
                     </td>
                     <td className="py-4 text-xs font-mono text-[#A0A0A0] dark:text-[#666666]">{formatDate(post.created_at)}</td>
                     
-                    {/* ⭐️ 하드코딩된 '0'을 버리고 진짜 DB 데이터를 띄웁니다. */}
                     <td className="py-4 text-xs font-mono text-[#A0A0A0] dark:text-[#666666]">
                       {post.view_count || 0}
+                    </td>
+                    <td className="py-4 text-xs font-mono font-bold text-red-600 dark:text-red-400">
+                      {post.likes?.length || 0}
                     </td>
                     <td className="py-4 text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
                       {post.comments?.length || 0}

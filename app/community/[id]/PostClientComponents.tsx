@@ -1,23 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { deletePost } from "../actions"; // ⭐️ 서버 액션 불러오기
+import { deletePost, incrementViewCount, toggleLikeAction } from "../actions"; // ⭐️ 서버 액션 불러오기
 
 // 1. 조회수 증가 트래커 (페이지 접속 시 1회 실행)
 export function ViewTracker({ postId }: { postId: string }) {
   const router = useRouter();
+  const hasTracked = useRef(false);
 
   useEffect(() => {
+    if (hasTracked.current) return;
+    
     const trackView = async () => {
       const viewed = sessionStorage.getItem(`viewed_${postId}`);
       if (!viewed) {
-        // DB 조회수 증가
-        await supabase.rpc("increment_view_count", { p_id: postId });
+        hasTracked.current = true; // Strict Mode 중복 방지
+        // DB 조회수 증가 (서버 액션)
+        await incrementViewCount(postId);
         // 중복 카운트 방지 메모
         sessionStorage.setItem(`viewed_${postId}`, "true"); 
-        // 서버 컴포넌트에게 최신 데이터를 가져오라고 찌름
+        // 클라이언트 라우터 리프레시로 즉각적인 화면 갱신
         router.refresh(); 
       }
     };
@@ -81,6 +85,7 @@ export function PostActions({ postId, authorId }: { postId: string, authorId: st
 
 // 3. 추천(좋아요) 버튼
 export function LikeButton({ postId, initialLikes, initialUser }: { postId: string, initialLikes: number, initialUser?: any }) {
+  const router = useRouter();
   const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(initialLikes);
   const [user, setUser] = useState<any>(initialUser || null);
@@ -94,7 +99,7 @@ export function LikeButton({ postId, initialLikes, initialUser }: { postId: stri
   useEffect(() => {
     const fetchLikeStatus = async () => {
       if (initialUser) {
-        const { data } = await supabase.from("likes").select("id").eq("post_id", postId).eq("user_id", initialUser.id).single();
+        const { data } = await supabase.from("likes").select("id").eq("post_id", postId).eq("user_id", initialUser.id).maybeSingle();
         if (data) setLiked(true);
       }
     };
@@ -106,18 +111,26 @@ export function LikeButton({ postId, initialLikes, initialUser }: { postId: stri
     if (isLiking) return;
     
     setIsLiking(true);
+    // UI 즉각 반영 (낙관적 업데이트)
+    setLiked(!liked);
+    setLikesCount(prev => liked ? prev - 1 : prev + 1);
+
     try {
-      if (liked) {
-        setLiked(false);
-        setLikesCount((prev) => prev - 1);
-        await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", user.id);
-      } else {
-        setLiked(true);
-        setLikesCount((prev) => prev + 1);
-        await supabase.from("likes").insert([{ post_id: postId, user_id: user.id }]);
+      const result = await toggleLikeAction(postId);
+      if (!result.success) {
+        // 서버 액션 실패 시 롤백
+        alert(result.message);
+        setLiked(liked);
+        setLikesCount(prev => liked ? prev + 1 : prev - 1);
       }
+    } catch (error) {
+      console.error(error);
+      // 통신 오류 시 롤백
+      setLiked(liked);
+      setLikesCount(prev => liked ? prev + 1 : prev - 1);
     } finally {
       setIsLiking(false);
+      router.refresh();
     }
   };
 

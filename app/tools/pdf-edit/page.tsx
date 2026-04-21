@@ -61,7 +61,7 @@ export default function PdfEditPage() {
           if (ctx) {
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            await page.render({ canvasContext: ctx, viewport }).promise;
+            await page.render({ canvasContext: ctx, viewport } as any).promise;
             newPages.push({
               id: Math.random().toString(36).substring(7),
               pageIndex: i - 1, // pdf-lib은 0부터 시작
@@ -163,7 +163,7 @@ export default function PdfEditPage() {
       }
 
       const pdfBytes = await newPdf.save();
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement("a");

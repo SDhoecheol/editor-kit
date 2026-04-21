@@ -129,7 +129,7 @@ export default function PdfCompressTargetPage() {
             const { bytes: compressedBytes, width, height } = await compressImageBytes(rawBytes, quality, scaleFactor);
             
             // 스트림 데이터를 새 압축 데이터로 직접 교체 (In-place Swap)
-            pdfObject.contents = compressedBytes;
+            (pdfObject as any).contents = compressedBytes;
             
             // 딕셔너리 정보(크기, 해상도, 컬러) 업데이트
             pdfObject.dict.set(PDFName.of('Length'), PDFNumber.of(compressedBytes.length));
@@ -147,7 +147,7 @@ export default function PdfCompressTargetPage() {
       const pdfBytes = await doc.save();
       setResultSize(pdfBytes.byteLength);
 
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement("a");

@@ -155,7 +155,7 @@ export default function PdfWatermarkPage() {
     timerRef.current = setTimeout(async () => {
       try {
         const pdfBytes = await applyWatermark(fileBuffer.slice(0), true);
-        const blob = new Blob([pdfBytes], { type: "application/pdf" });
+        const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         
         setPreviewUrl(prev => {
@@ -181,7 +181,7 @@ export default function PdfWatermarkPage() {
     try {
       // 실제 저장 시에는 모든 페이지 적용
       const pdfBytes = await applyWatermark(fileBuffer.slice(0), false);
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement("a");

@@ -50,7 +50,7 @@ export default function PdfToImgPage() {
         if (ctx) {
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          await page.render({ canvasContext: ctx, viewport } as any).promise;
           setPreviewUrl(canvas.toDataURL("image/jpeg", 0.7));
         }
       } catch (err) {
@@ -104,7 +104,7 @@ export default function PdfToImgPage() {
           }
 
           // 인쇄 품질을 높이기 위한 안티앨리어싱 등의 렌더링 옵션 (pdfjs 내부적으로 최적화됨)
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          await page.render({ canvasContext: ctx, viewport } as any).promise;
           
           const mimeType = format === "jpeg" ? "image/jpeg" : "image/png";
           const quality = format === "jpeg" ? 1.0 : undefined; // PNG는 무손실 압축

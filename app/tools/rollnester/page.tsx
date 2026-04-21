@@ -81,7 +81,7 @@ export default function RollNesterPage() {
         files.forEach(f => fileBuffers[f.fileId] = f.buffer);
 
         const pdfBytes = await generateNestedPdf(placedItems, fileBuffers, totalWidth, totalHeight, markOption);
-        const blob = new Blob([pdfBytes], { type: "application/pdf" });
+        const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
 
         setPreviewUrl(prev => {
@@ -172,7 +172,7 @@ export default function RollNesterPage() {
 
       const pdfBytes = await generateNestedPdf(placedItems, fileBuffers, totalWidth, totalHeight, markOption);
       
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       

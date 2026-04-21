@@ -5,7 +5,7 @@ import { PDFDocument, PDFName, PDFRawStream, PDFNumber } from "pdf-lib";
 
 async function compressImageBytes(jpegBytes: Uint8Array, quality: number, scaleFactor: number): Promise<{bytes: Uint8Array, width: number, height: number}> {
   return new Promise((resolve, reject) => {
-    const blob = new Blob([jpegBytes], { type: 'image/jpeg' });
+    const blob = new Blob([jpegBytes as unknown as BlobPart], { type: 'image/jpeg' });
     const url = URL.createObjectURL(blob);
     const img = new Image();
     

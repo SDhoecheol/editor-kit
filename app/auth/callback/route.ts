@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
 
   if (code) {
@@ -33,5 +33,12 @@ export async function GET(request: Request) {
   }
 
   // 로그인 완료 후 홈으로 리다이렉트
-  return NextResponse.redirect(origin);
+  // ⭐️ Netlify 환경에서 request.nextUrl.origin이 localhost로 잡히는 버그 방지
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  const protocol = request.headers.get('x-forwarded-proto') || 'https';
+  const baseUrl = `${protocol}://${host}`;
+
+  const redirectUrl = new URL('/', baseUrl);
+  
+  return NextResponse.redirect(redirectUrl);
 }

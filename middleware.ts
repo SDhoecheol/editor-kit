@@ -6,7 +6,12 @@ export async function middleware(request: NextRequest) {
   // 1. 1단계에서 만든 유틸리티를 호출하여 세션 업데이트 및 유저 정보 가져오기
   const { supabaseResponse, user, supabase } = await updateSession(request);
 
-  const url = request.nextUrl.clone();
+  // ⭐️ Netlify 배포 환경에서 request.nextUrl이 localhost를 바라보는 문제 해결
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  const protocol = request.headers.get('x-forwarded-proto') || 'https';
+  const baseUrl = `${protocol}://${host}`;
+
+  const url = new URL(request.nextUrl.pathname, baseUrl);
   const pathname = request.nextUrl.pathname;
 
   // 2. 프로필 유무 확인 로직 (로그인했는데 프로필이 없다면 무조건 /welcome으로 강제 이동)

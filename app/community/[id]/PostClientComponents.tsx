@@ -30,59 +30,6 @@ export function ViewTracker({ postId }: { postId: string }) {
   return null; 
 }
 
-// 2. 작성자 전용 액션 (수정/삭제) ⭐️ 수정 버튼 링크 연결 완료
-export function PostActions({ postId, authorId }: { postId: string, authorId: string }) {
-  const router = useRouter();
-  const [isAuthor, setIsAuthor] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); // 삭제 진행 중 상태
-
-  useEffect(() => {
-    const checkAuthor = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.id === authorId) setIsAuthor(true);
-    };
-    checkAuthor();
-  }, [authorId]);
-
-  if (!isAuthor) return null;
-
-  const handleDelete = async () => {
-    if (confirm("정말 이 글을 삭제하시겠습니까?")) {
-      setIsDeleting(true);
-      
-      const result = await deletePost(postId);
-      
-      if (result.success) {
-        alert(result.message);
-        router.push("/community"); 
-      } else {
-        alert(result.message);
-        setIsDeleting(false);
-      }
-    }
-  };
-
-  return (
-    <div className="flex justify-end gap-2 mt-6">
-      {/* ⭐️ 수정 버튼 클릭 시 수정 전용 페이지로 이동 */}
-      <button 
-        onClick={() => router.push(`/community/edit/${postId}`)}
-        className="px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors"
-      >
-        수정
-      </button>
-      <button 
-        onClick={handleDelete} 
-        disabled={isDeleting}
-        className="px-4 py-2 border-2 border-red-600 bg-white dark:bg-[#1E1E1E] text-red-600 text-sm font-bold hover:bg-red-50 dark:hover:bg-[#3A1A1A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-      >
-        {isDeleting && <span className="animate-spin material-symbols-outlined text-[16px]">sync</span>}
-        {isDeleting ? "삭제 중..." : "삭제"}
-      </button>
-    </div>
-  );
-}
-
 // 3. 추천(좋아요) 버튼
 export function LikeButton({ postId, initialLikes, initialUser }: { postId: string, initialLikes: number, initialUser?: any }) {
   const router = useRouter();

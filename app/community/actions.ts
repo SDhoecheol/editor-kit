@@ -3,6 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 // 유틸: 공통 Supabase 클라이언트 생성 로직
 async function getSupabase() {
@@ -149,7 +150,7 @@ export async function deletePost(postId: string) {
   revalidatePath("/");
   revalidatePath("/mypage");
 
-  return { success: true, message: "게시글이 삭제되고 30 Ink가 회수되었습니다." };
+  redirect("/community");
 }
 
 // --- ⭐️ 댓글 삭제 서버 액션 (-5 잉크 회수) ---
@@ -211,7 +212,7 @@ export async function updatePost(
   revalidatePath("/");                    
   revalidatePath("/mypage");              
 
-  return { success: true, message: "게시글이 성공적으로 수정되었습니다." };
+  redirect(`/community/${postId}`);
 }
 
 // --- ⭐️ 질문 채택(해결) 서버 액션 (+100 잉크) ---

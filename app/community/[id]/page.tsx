@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { ViewTracker, PostActions, LikeButton, CommentSection } from "./PostClientComponents"; 
+import { ViewTracker, LikeButton, CommentSection } from "./PostClientComponents"; 
+import PostActionButtons from "./PostActionButtons";
 import ReactMarkdown from "react-markdown";
 
 const formatDateTime = (dateString: string) => {
@@ -146,7 +147,9 @@ export default async function CommunityDetailPage({
       </div>
 
       {/* ⭐️ 작성자 전용 액션 (클라이언트 컴포넌트) */}
-      <PostActions postId={postId} authorId={post.author_id} />
+      {user?.id === post.author_id && (
+        <PostActionButtons postId={postId} />
+      )}
 
       {/* ⭐️ 댓글 섹션 (클라이언트 컴포넌트) */}
       <CommentSection 

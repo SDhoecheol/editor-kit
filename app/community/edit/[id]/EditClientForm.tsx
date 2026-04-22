@@ -68,11 +68,9 @@ export default function EditClientForm({ initialData, postId }: { initialData: a
     
     try {
       const result = await updatePost(postId, finalTitle, content, boardName, subCategory, false);
-
-      if (result.success) {
-        alert(result.message);
-        router.push(`/community/${postId}`); 
-      } else {
+      // 서버 액션 성공 시 redirect가 발생하며 이 줄 아래 코드는 실행되지 않습니다.
+      // 실패 시에만 에러 객체가 반환됩니다.
+      if (result && !result.success) {
         alert(result.message);
         setIsSubmitting(false);
       }

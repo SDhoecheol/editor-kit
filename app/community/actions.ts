@@ -132,14 +132,15 @@ export async function deletePost(postId: string) {
 
   if (!user) return { success: false, message: "로그인이 필요합니다." };
 
-  const { error: deleteError } = await supabase
+  const { data: deletedRows, error: deleteError } = await supabase
     .from("posts")
     .delete()
     .eq("id", postId)
-    .eq("author_id", user.id); 
+    .eq("author_id", user.id)
+    .select();
 
-  if (deleteError) {
-    console.error("게시글 삭제 실패:", deleteError);
+  if (deleteError || !deletedRows || deletedRows.length === 0) {
+    console.error("게시글 삭제 실패:", deleteError || "0 rows deleted (RLS or mismatch)");
     return { success: false, message: "게시글 삭제에 실패했습니다." };
   }
 
@@ -150,7 +151,7 @@ export async function deletePost(postId: string) {
   revalidatePath("/");
   revalidatePath("/mypage");
 
-  redirect("/community");
+  return { success: true, message: "게시글이 삭제되고 30 Ink가 회수되었습니다." };
 }
 
 // --- ⭐️ 댓글 삭제 서버 액션 (-5 잉크 회수) ---
@@ -197,13 +198,13 @@ export async function updatePost(
       content, 
       board_type: boardType,
       prefix,
-      is_anonymous: isAnonymous,
-      updated_at: new Date().toISOString() 
+      is_anonymous: isAnonymous
     })
     .eq("id", postId)
     .eq("author_id", user.id); 
 
   if (updateError) {
+    console.error("게시글 수정 실패:", updateError);
     return { success: false, message: "서버 오류로 수정하지 못했습니다." };
   }
 
@@ -212,7 +213,7 @@ export async function updatePost(
   revalidatePath("/");                    
   revalidatePath("/mypage");              
 
-  redirect(`/community/${postId}`);
+  return { success: true, message: "게시글이 성공적으로 수정되었습니다." };
 }
 
 // --- ⭐️ 질문 채택(해결) 서버 액션 (+100 잉크) ---

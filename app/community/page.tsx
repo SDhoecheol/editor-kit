@@ -109,10 +109,10 @@ export default async function CommunityPage({
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-12 lg:py-20 space-y-6 md:space-y-8">
       
       {/* 1. 헤더 및 글쓰기 버튼 */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <span className="bg-[#222222] text-[#F5F4F0] dark:bg-[#333333] dark:text-[#EAEAEA] px-2 py-0.5 text-[10px] font-black tracking-widest">
@@ -130,7 +130,7 @@ export default async function CommunityPage({
         {!(activeCat === '공지사항' && !isAdmin) && (
           <Link 
             href={`/community/write?board=${activeCat === '전체보기' ? '자유게시판' : activeCat}`}
-            className="bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-8 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#E5E4E0] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center justify-center gap-2 text-base shrink-0"
+            className="w-full md:w-auto bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-8 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#E5E4E0] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center justify-center gap-2 text-base shrink-0"
           >
             <span className="material-symbols-outlined text-[20px]">edit_square</span> 글쓰기
           </Link>
@@ -156,17 +156,17 @@ export default async function CommunityPage({
       </nav>
 
       {/* 3. 리스트 상단 컨트롤 (정렬 필터) */}
-      <div className="flex justify-between items-end pt-4">
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 md:gap-0 pt-4">
         <span className="text-sm font-black text-[#222222] dark:text-[#EAEAEA]">
           <span className="text-blue-600 dark:text-blue-400">{activeCat}</span> 게시물 ({count || 0})
         </span>
         
-        <div className="flex border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111]">
+        <div className="flex w-full md:w-auto border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111]">
           {["최신순", "조회순", "추천순"].map((sort) => (
             <Link 
               key={sort}
               href={`/community?cat=${activeCat}&sort=${sort}${searchKeyword ? `&search=${searchKeyword}` : ''}`}
-              className={`px-3 py-1.5 text-xs font-bold border-r border-[#E5E4E0] dark:border-[#333333] last:border-0 transition-colors ${
+              className={`flex-1 md:flex-none text-center px-3 py-1.5 text-xs font-bold border-r border-[#E5E4E0] dark:border-[#333333] last:border-0 transition-colors ${
                 sortType === sort ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'
               }`}
             >
@@ -177,9 +177,9 @@ export default async function CommunityPage({
       </div>
 
       {/* 4. 메인 게시판 영역 */}
-      <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] transition-colors min-h-[400px]">
+      <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] md:shadow-[8px_8px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] dark:md:shadow-[8px_8px_0px_#111111] transition-colors min-h-[400px]">
         
-        <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] border-b-2 border-[#222222] dark:border-[#444444] px-6 py-4 flex items-center justify-between">
+        <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] border-b-2 border-[#222222] dark:border-[#444444] px-4 md:px-6 py-4 flex items-center justify-between">
            <h2 className="font-black text-[#222222] dark:text-[#EAEAEA] flex items-center gap-2">
              <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">tag</span>
              {activeCat}
@@ -197,7 +197,7 @@ export default async function CommunityPage({
           </div>
         ) : activeCat === "포트폴리오" ? (
           // 포트폴리오 게시판 뷰 (썸네일)
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="p-4 md:p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
             {displayPosts.map((post) => (
               <Link key={post.id} href={`/community/${post.id}`} className="group cursor-pointer block">
                 <div className="w-full aspect-[4/3] border-2 border-[#222222] dark:border-[#444444] bg-[#F5F4F0] dark:bg-[#121212] mb-3 relative overflow-hidden group-hover:shadow-[4px_4px_0px_#222222] dark:group-hover:shadow-[4px_4px_0px_#111111] transition-all group-hover:-translate-y-1">

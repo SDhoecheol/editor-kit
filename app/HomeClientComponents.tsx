@@ -55,7 +55,7 @@ export function ProfileWidget({ initialUser, initialProfile }: { initialUser?: a
       <h3 className="font-black text-sm uppercase tracking-widest border-b-2 border-[#E5E4E0] dark:border-[#333333] pb-2 mb-4 dark:text-[#EAEAEA]">
         My Profile
       </h3>
-      <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] p-5 transition-colors min-h-[220px] flex flex-col justify-center">
+      <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] md:shadow-[8px_8px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] dark:md:shadow-[8px_8px_0px_#111111] p-4 md:p-5 transition-colors min-h-[220px] flex flex-col justify-center">
         
         {isChecking ? (
           <div className="text-center text-[#A0A0A0] font-bold text-sm flex flex-col items-center justify-center py-6">

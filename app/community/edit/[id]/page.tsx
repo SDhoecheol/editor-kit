@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import EditClientForm from "./EditClientForm"; 
+import EditClientForm from "./EditClientForm";
 
 export default async function CommunityEditPage({
   params,
@@ -11,7 +12,20 @@ export default async function CommunityEditPage({
   const resolvedParams = await params;
   const postId = resolvedParams.id;
 
-  // 2. 서버에서 현재 로그인한 유저 세션 확인
+  // 2. 서버에서 현재 로그인한 유저 세션 확인 (SSR)
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
   const { data: { session } } = await supabase.auth.getSession();
   const user = session?.user;
 

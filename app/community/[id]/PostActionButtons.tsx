@@ -11,10 +11,13 @@ export default function PostActionButtons({ postId }: { postId: string }) {
   const handleDelete = () => {
     if (window.confirm("정말 이 글을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.")) {
       startTransition(async () => {
-        // 서버 액션 호출: 성공 시 액션 내부에서 redirect가 발생하며,
-        // 실패 시에만 에러 객체를 반환합니다.
+        // 서버 액션 호출 (리턴값으로 성공/실패 여부 판단)
         const result = await deletePost(postId);
-        if (result && !result.success) {
+        if (result.success) {
+          alert(result.message);
+          router.push("/community");
+          router.refresh();
+        } else {
           alert(result.message);
         }
       });

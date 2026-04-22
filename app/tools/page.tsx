@@ -123,12 +123,12 @@ export default function ToolsPage() {
 
   return (
     <div className="bg-[#F5F4F0] dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] min-h-[calc(100vh-64px)] transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-6 py-12 md:py-20">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-12 lg:py-20">
         
         {/* Header */}
-        <header className="border-b-4 border-[#222222] dark:border-[#444444] pb-8 mb-16 flex justify-between items-end transition-colors">
+        <header className="border-b-4 border-[#222222] dark:border-[#444444] pb-6 md:pb-8 mb-8 md:mb-16 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 md:gap-0 transition-colors">
           <div>
-            <h1 className="text-4xl font-black tracking-tighter uppercase">EditorKit Utilities</h1>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tighter uppercase">EditorKit Utilities</h1>
             <p className="text-[#666666] dark:text-[#A0A0A0] mt-2 font-mono text-sm">
               Essential Tools for Print Professionals
             </p>
@@ -140,24 +140,24 @@ export default function ToolsPage() {
 
         {/* 카테고리별 렌더링 */}
         {toolCategories.map((category, catIdx) => (
-          <div key={catIdx} className="mb-20">
+          <div key={catIdx} className="mb-12 md:mb-20">
             {/* 카테고리 헤더 */}
-            <div className="mb-8 border-l-8 border-[#222222] dark:border-[#444444] pl-4">
-              <h2 className="text-2xl font-black tracking-tight text-[#222222] dark:text-[#EAEAEA]">
+            <div className="mb-6 md:mb-8 border-l-4 md:border-l-8 border-[#222222] dark:border-[#444444] pl-3 md:pl-4">
+              <h2 className="text-xl md:text-2xl font-black tracking-tight text-[#222222] dark:text-[#EAEAEA]">
                 {category.categoryName}
               </h2>
-              <p className="text-sm font-bold text-[#666666] dark:text-[#A0A0A0] mt-1">
+              <p className="text-xs md:text-sm font-bold text-[#666666] dark:text-[#A0A0A0] mt-1">
                 {category.desc}
               </p>
             </div>
             
             {/* 툴 그리드 */}
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
               {category.tools.map((tool) => (
                 <Link 
                   key={tool.id} 
                   href={tool.href}
-                  className="group border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] shadow-[6px_6px_0px_#222222] dark:shadow-[6px_6px_0px_#111111] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] p-6 transition-all relative flex flex-col justify-between h-48 cursor-pointer"
+                  className="group border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] shadow-[4px_4px_0px_#222222] md:shadow-[6px_6px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] dark:md:shadow-[6px_6px_0px_#111111] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] p-5 md:p-6 transition-all relative flex flex-col justify-between h-auto min-h-[10rem] md:h-48 cursor-pointer"
                 >
                   {/* 상단: ID 뱃지 */}
                   <div className="flex justify-between items-start">
@@ -167,11 +167,11 @@ export default function ToolsPage() {
                   </div>
 
                   {/* 중단: 타이틀 및 설명 */}
-                  <div className="mt-2 flex-1 flex flex-col justify-center">
-                    <h2 className="text-2xl font-black tracking-tight mb-2 text-[#222222] dark:text-[#EAEAEA]">
+                  <div className="mt-2 flex-1 flex flex-col justify-center gap-1 md:gap-2">
+                    <h2 className="text-lg md:text-2xl font-black tracking-tight text-[#222222] dark:text-[#EAEAEA]">
                       {tool.title}
                     </h2>
-                    <p className="text-sm leading-relaxed text-[#666666] dark:text-[#A0A0A0] line-clamp-2">
+                    <p className="text-xs md:text-sm leading-relaxed text-[#666666] dark:text-[#A0A0A0] line-clamp-2">
                       {tool.desc}
                     </p>
                   </div>
@@ -189,8 +189,8 @@ export default function ToolsPage() {
         ))}
 
         {/* 하단 안내 섹션 */}
-        <section className="pt-10 border-t-4 border-[#222222] dark:border-[#444444]">
-          <div className="border-2 border-[#222222] dark:border-[#444444] border-l-8 bg-white dark:bg-[#1E1E1E] shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] p-6 flex gap-4 items-start transition-colors">
+        <section className="pt-8 md:pt-10 border-t-4 border-[#222222] dark:border-[#444444]">
+          <div className="border-2 border-[#222222] dark:border-[#444444] border-l-4 md:border-l-8 bg-white dark:bg-[#1E1E1E] shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] p-4 md:p-6 flex flex-col sm:flex-row gap-3 sm:gap-4 items-start transition-colors">
             <span className="material-symbols-outlined text-[#222222] dark:text-[#EAEAEA]">info</span>
             <div>
               <h4 className="font-bold text-[#222222] dark:text-[#EAEAEA]">기능 제안 안내</h4>

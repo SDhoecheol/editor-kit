@@ -59,19 +59,19 @@ export default async function Home() {
   const portfolioPosts = posts.filter(p => p.board_type === "포트폴리오").slice(0, 5);
 
   return (
-    <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-10 grid grid-cols-1 lg:grid-cols-4 gap-8 transition-colors duration-300">
+    <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8 transition-colors duration-300">
       
-      <div className="lg:col-span-3 space-y-8">
+      <div className="lg:col-span-3 space-y-6 md:space-y-8">
         
         {/* 히어로 배너 */}
-        <div className="bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] p-8 relative overflow-hidden transition-colors">
-          <div className="relative z-10 w-2/3">
+        <div className="bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] md:shadow-[8px_8px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] dark:md:shadow-[8px_8px_0px_#111111] p-6 md:p-8 relative overflow-hidden transition-colors">
+          <div className="relative z-10 w-full md:w-2/3">
             <span className="inline-block bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] font-black text-[10px] uppercase tracking-widest px-2 py-0.5 mb-4">Notice</span>
-            <h2 className="text-3xl font-black mb-3 leading-tight">에디터킷 V2.0 업데이트<br />3D 패키징 목업 기능 추가!</h2>
-            <p className="text-sm text-[#666666] dark:text-[#A0A0A0] mb-6">번거로운 포토샵 합성 없이, 단 3초 만에 PDF를 입체적인 책자로 변환하세요.</p>
-            <Link href="/tools/mockup3d" className="inline-block bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-6 py-2 font-bold text-sm hover:bg-transparent hover:text-[#222222] dark:hover:bg-[#1E1E1E] dark:hover:text-[#EAEAEA] transition-all shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#444444] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">자세히 보기</Link>
+            <h2 className="text-2xl md:text-3xl font-black mb-3 leading-tight">에디터킷 V2.0 업데이트<br />3D 패키징 목업 기능 추가!</h2>
+            <p className="text-xs md:text-sm text-[#666666] dark:text-[#A0A0A0] mb-6">번거로운 포토샵 합성 없이, 단 3초 만에 PDF를 입체적인 책자로 변환하세요.</p>
+            <Link href="/tools/mockup3d" className="inline-block w-full md:w-auto text-center bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-6 py-3 md:py-2 font-bold text-sm hover:bg-transparent hover:text-[#222222] dark:hover:bg-[#1E1E1E] dark:hover:text-[#EAEAEA] transition-all shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#444444] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">자세히 보기</Link>
           </div>
-          <span className="material-symbols-outlined absolute -right-6 -bottom-6 text-[180px] text-[#222222]/5 dark:text-[#EAEAEA]/5 rotate-[-15deg] pointer-events-none">view_in_ar</span>
+          <span className="material-symbols-outlined absolute -right-6 -bottom-6 text-[120px] md:text-[180px] text-[#222222]/5 dark:text-[#EAEAEA]/5 rotate-[-15deg] pointer-events-none">view_in_ar</span>
         </div>
 
         {/* 커뮤니티 2x2 그리드 */}
@@ -85,7 +85,7 @@ export default async function Home() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 items-stretch">
             
             {/* 1. 공지사항 (날짜 표시) */}
             <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] transition-colors flex flex-col h-full">
@@ -207,7 +207,7 @@ export default async function Home() {
       </div>
 
       {/* 우측 사이드바 영역 */}
-      <aside className="hidden lg:flex flex-col gap-6">
+      <aside className="flex flex-col gap-6 lg:col-span-1">
         
         {/* ⭐️ 사용자 로그인 상태를 서버에서 미리 받아와 넘겨줌 */}
         <ProfileWidget initialUser={user} initialProfile={profile} />
@@ -216,7 +216,7 @@ export default async function Home() {
           <h3 className="font-black text-sm uppercase tracking-widest border-b-2 border-[#E5E4E0] dark:border-[#333333] pb-2 mb-4 dark:text-[#EAEAEA]">
             Quick Tools
           </h3>
-          <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] p-5 transition-colors">
+          <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#E5E4E0] md:shadow-[8px_8px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] dark:md:shadow-[8px_8px_0px_#111111] p-4 md:p-5 transition-colors">
             <ul className="space-y-4">
               <li><Link href="/tools/seneca" className="flex items-center gap-2 text-sm font-bold text-[#666666] dark:text-[#A0A0A0] hover:text-[#222222] dark:hover:text-[#EAEAEA] transition-colors group"><span className="material-symbols-outlined text-[18px] text-[#A0A0A0] group-hover:translate-x-1 transition-transform">menu_book</span> 세네카 계산기</Link></li>
               <li><Link href="/tools/harikomi" className="flex items-center gap-2 text-sm font-bold text-[#666666] dark:text-[#A0A0A0] hover:text-[#222222] dark:hover:text-[#EAEAEA] transition-colors group"><span className="material-symbols-outlined text-[18px] text-[#A0A0A0] group-hover:translate-x-1 transition-transform">grid_on</span> 하리꼬미 조판</Link></li>

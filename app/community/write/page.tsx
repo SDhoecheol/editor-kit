@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, Suspense, useRef } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import TuiEditorWrapper from "@/components/TuiEditorWrapper"; // ⭐️ 새로 만든 에디터 포장지 불러오기
+import TiptapEditor from "@/components/TiptapEditor";
 
 const SUB_CATEGORIES: Record<string, string[]> = {
   "공지사항": ["안내", "업데이트", "이벤트"],
@@ -25,71 +25,50 @@ function WriteEditorForm() {
 
   const [subCategory, setSubCategory] = useState("");
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState<string>(""); // 에디터 내용을 담을 상태
+  const [content, setContent] = useState<string>(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ⭐️ Toast UI Editor 인스턴스를 조작하기 위한 Ref
-  const editorRef = useRef<any>(null);
-
-  // ⭐️ 에디터에서 사진을 첨부할 때 가로채서 실행될 이미지 업로드 함수
+  // 이미지 업로드 로직 (TiptapEditor에 전달됨)
   const handleImageUpload = async (file: File): Promise<string> => {
-    if (!file.type.startsWith("image/")) {
-      alert("이미지 파일만 업로드할 수 있습니다.");
-      throw new Error("Invalid file type");
-    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) throw new Error("로그인이 필요합니다.");
 
-    try {
-      // getSession()이 아닌 getUser()를 사용하여 실제 서버와 토큰 검증
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        throw new Error("로그인이 필요합니다.");
-      }
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${user.id}/${Date.now()}_${Math.floor(Math.random() * 1000)}.${fileExt}`;
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}_${Math.floor(Math.random() * 1000)}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage
+      .from("post_images")
+      .upload(fileName, file);
 
-      // Supabase Storage에 업로드
-      const { error: uploadError } = await supabase.storage
-        .from("post_images")
-        .upload(fileName, file);
+    if (uploadError) throw uploadError;
 
-      if (uploadError) {
-        alert(`스토리지 에러: ${uploadError.message}`);
-        throw uploadError;
-      }
+    const { data: { publicUrl } } = supabase.storage
+      .from("post_images")
+      .getPublicUrl(fileName);
 
-      // 업로드된 이미지의 공개 URL 가져오기
-      const { data: { publicUrl } } = supabase.storage
-        .from("post_images")
-        .getPublicUrl(fileName);
-
-      // ⭐️ URL을 반환하면 에디터가 알아서 본문에 이미지를 예쁘게 띄워줍니다!
-      return publicUrl;
-      
-    } catch (error: any) {
-      console.error("이미지 업로드 실패:", error);
-      throw error;
-    }
+    return publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!subCategory) return alert("해당 게시판 전용 말머리를 반드시 선택해주세요.");
-    if (!title.trim() || !content.trim()) return alert("제목과 내용을 모두 입력해주세요.");
+    
+    // Quill은 빈 내용일 때 '<p><br></p>' 를 반환하므로 이를 필터링
+    const isEmpty = !content || content === '<p><br></p>';
+    if (!title.trim() || isEmpty) return alert("제목과 내용을 모두 입력해주세요.");
     
     setIsSubmitting(true);
     try {
       const finalTitle = subCategory ? `[${subCategory}] ${title}` : title;
       
-      // 서버 액션을 통한 안전한 글 작성 및 잉크 보상 처리
       const { createPost } = await import("../actions");
       const result = await createPost(
         finalTitle, 
         content, 
         boardName, 
-        subCategory, // 말머리 (prefix)
-        false // 익명 여부 (현재 UI에 없으므로 기본값 false 적용)
+        subCategory,
+        false 
       );
 
       if (!result.success) {
@@ -135,12 +114,11 @@ function WriteEditorForm() {
           </div>
         </div>
 
-        {/* ⭐️ 복잡했던 textarea와 탭들을 걷어내고 에디터 컴포넌트 하나로 통합! */}
-        <div className="border-4 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] transition-colors bg-white dark:bg-[#1E1E1E]">
-          <TuiEditorWrapper 
-            editorRef={editorRef}
-            initialValue=""
-            onChange={(newContent: string) => setContent(newContent)}
+        {/* WYSIWYG 에디터 적용 */}
+        <div className="shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] transition-colors">
+          <TiptapEditor 
+            value={content}
+            onChange={setContent}
             onImageUpload={handleImageUpload}
           />
         </div>

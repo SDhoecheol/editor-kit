@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { ViewTracker, PostActions, LikeButton, CommentSection } from "./PostClientComponents"; // ⭐️ 클라이언트 컴포넌트 불러오기
-import TuiViewerWrapper from "@/components/TuiViewerWrapper";
+import { ViewTracker, PostActions, LikeButton, CommentSection } from "./PostClientComponents"; 
+import ReactMarkdown from "react-markdown";
 
 const formatDateTime = (dateString: string) => {
   const d = new Date(dateString);
@@ -122,8 +122,23 @@ export default async function CommunityDetailPage({
           </div>
         </div>
 
-        <div className="p-8 min-h-[300px] text-[15px] leading-relaxed text-[#222222] dark:text-[#EAEAEA] font-medium">
-          <TuiViewerWrapper initialValue={post.content} />
+        <div className="p-8 min-h-[300px] text-[16px] leading-relaxed text-[#222222] dark:text-[#EAEAEA] font-medium">
+          {/* WYSIWYG 에디터가 생성한 순수 HTML을 그대로 렌더링합니다 */}
+          <div 
+            className="wysiwyg-content"
+            dangerouslySetInnerHTML={{ __html: post.content }}
+          />
+          {/* WYSIWYG 스타일 대응 */}
+          <style dangerouslySetInnerHTML={{__html: `
+            .wysiwyg-content p { margin-bottom: 1.25rem; white-space: pre-wrap; }
+            .wysiwyg-content strong { font-weight: 900; }
+            .wysiwyg-content em { font-style: italic; }
+            .wysiwyg-content u { text-decoration: underline; }
+            .wysiwyg-content img { max-width: 100%; border-radius: 0.375rem; border: 2px solid #222222; box-shadow: 4px 4px 0px #222222; margin: 1.5rem 0; }
+            .dark .wysiwyg-content img { border-color: #444444; box-shadow: 4px 4px 0px #111111; }
+            .wysiwyg-content h1 { font-size: 2.25rem; font-weight: 900; margin-top: 2rem; margin-bottom: 1rem; }
+            .wysiwyg-content h2 { font-size: 1.875rem; font-weight: 900; margin-top: 2rem; margin-bottom: 1rem; }
+          `}} />
         </div>
 
         {/* ⭐️ 좋아요 버튼 (클라이언트 컴포넌트) */}

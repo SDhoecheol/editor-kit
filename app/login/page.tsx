@@ -40,7 +40,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-6 bg-[#F5F4F0] dark:bg-[#121212] transition-colors">
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-4 md:p-6 bg-[#F5F4F0] dark:bg-[#121212] transition-colors">
       
       <div className="w-full max-w-md bg-white dark:bg-[#1E1E1E] border-4 border-[#222222] dark:border-[#444444] shadow-[12px_12px_0px_#222222] dark:shadow-[12px_12px_0px_#111111] overflow-hidden relative">
         
@@ -51,7 +51,7 @@ export default function LoginPage() {
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full border border-[#222222] dark:border-[#1E1E1E]"></div>
         </div>
 
-        <div className="p-8 sm:p-10 flex flex-col items-center">
+        <div className="p-6 sm:p-8 md:p-10 flex flex-col items-center">
           <div className="text-center mb-10 w-full">
             <Link href="/" className="inline-flex items-center gap-2 text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tighter mb-4 hover:opacity-80 transition-opacity">
               <span className="material-symbols-outlined text-[40px]">layers</span> EditorKit

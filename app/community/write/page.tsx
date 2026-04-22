@@ -86,7 +86,7 @@ function WriteEditorForm() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12 md:py-20 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-12 lg:py-20 space-y-6 md:space-y-8">
       <header className="border-b-4 border-[#222222] dark:border-[#444444] pb-6 flex flex-col gap-2">
         <div className="flex items-center gap-3">
           <span className="bg-blue-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase border-2 border-[#222222] dark:border-transparent">
@@ -94,7 +94,7 @@ function WriteEditorForm() {
           </span>
           <span className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0] tracking-widest">새 게시글 작성</span>
         </div>
-        <h1 className="text-4xl md:text-5xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight flex items-center gap-3 mt-2">
+        <h1 className="text-3xl md:text-5xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight flex items-center gap-2 md:gap-3 mt-2">
           <span className="text-blue-600 dark:text-blue-400">{boardName}</span>
           <span>글쓰기</span>
         </h1>
@@ -127,7 +127,7 @@ function WriteEditorForm() {
           <Link href="/community" className="px-6 py-3 font-black text-[#666666] hover:text-[#222222] dark:hover:text-[#EAEAEA] transition-colors flex items-center gap-1">
             <span className="material-symbols-outlined text-[20px]">arrow_back</span> 취소
           </Link>
-          <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white border-4 border-[#222222] dark:border-transparent px-10 py-4 font-black shadow-[6px_6px_0px_#222222] dark:shadow-[6px_6px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_#222222] dark:hover:shadow-[4px_4px_0px_#111111] transition-all flex items-center justify-center gap-2 text-lg disabled:opacity-50">
+          <button type="submit" disabled={isSubmitting} className="bg-blue-600 text-white border-4 border-[#222222] dark:border-transparent px-6 md:px-10 py-3 md:py-4 font-black shadow-[4px_4px_0px_#222222] md:shadow-[6px_6px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] dark:md:shadow-[6px_6px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#222222] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center justify-center gap-2 text-base md:text-lg disabled:opacity-50">
             {isSubmitting ? <span className="animate-spin material-symbols-outlined">sync</span> : <span className="material-symbols-outlined">send</span>}
             {isSubmitting ? "등록 중..." : "글 등록하기"}
           </button>

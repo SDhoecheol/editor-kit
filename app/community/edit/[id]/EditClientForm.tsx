@@ -84,7 +84,7 @@ export default function EditClientForm({ initialData, postId }: { initialData: a
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12 md:py-20 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-12 lg:py-20 space-y-6 md:space-y-8">
       
       <header className="border-b-4 border-[#222222] dark:border-[#444444] pb-6 flex flex-col gap-2">
         <div className="flex items-center gap-3">
@@ -95,7 +95,7 @@ export default function EditClientForm({ initialData, postId }: { initialData: a
             게시글 수정 중
           </span>
         </div>
-        <h1 className="text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight flex items-center gap-3">
+        <h1 className="text-3xl md:text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight flex items-center gap-2 md:gap-3">
           <span className="text-[#222222] dark:text-[#EAEAEA]">{boardName}</span>
           <span className="text-blue-600 dark:text-blue-400">수정하기</span>
         </h1>
@@ -144,7 +144,7 @@ export default function EditClientForm({ initialData, postId }: { initialData: a
           <button 
             type="submit" 
             disabled={isSubmitting}
-            className="bg-[#222222] text-[#F5F4F0] border-2 border-[#222222] px-10 py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#E5E4E0] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="bg-[#222222] text-[#F5F4F0] border-2 border-[#222222] px-6 md:px-10 py-3 md:py-3.5 font-black shadow-[4px_4px_0px_#E5E4E0] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#E5E4E0] transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm md:text-base"
           >
             {isSubmitting ? <span className="animate-spin material-symbols-outlined">sync</span> : <span className="material-symbols-outlined text-[18px]">edit_document</span>}
             {isSubmitting ? "수정 중..." : "수정 완료"}

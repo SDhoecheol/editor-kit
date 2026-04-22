@@ -64,7 +64,7 @@ export default async function CommunityDetailPage({
     .eq("post_id", postId);
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-12 md:py-20 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-12 lg:py-20 space-y-6 md:space-y-8">
       
       {/* ⭐️ 접속 시 조회수를 올려주는 숨겨진 클라이언트 컴포넌트 */}
       <ViewTracker postId={postId} />
@@ -83,13 +83,13 @@ export default async function CommunityDetailPage({
       {/* 게시글 본문 영역 */}
       <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] transition-colors">
         
-        <div className="p-6 border-b-2 border-[#E5E4E0] dark:border-[#333333]">
+        <div className="p-4 sm:p-6 border-b-2 border-[#E5E4E0] dark:border-[#333333]">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[11px] font-black px-2 py-0.5 border-2 border-[#222222] dark:border-[#A0A0A0] text-[#222222] dark:text-[#EAEAEA]">
               {post.board_type.replace("게시판", "").substring(0, 2)}
             </span>
           </div>
-          <h2 className="text-2xl md:text-3xl font-black text-[#222222] dark:text-[#EAEAEA] leading-snug flex items-center gap-2">
+          <h2 className="text-xl md:text-3xl font-black text-[#222222] dark:text-[#EAEAEA] leading-snug flex items-center gap-2">
             {post.is_resolved && (
               <span className="bg-blue-600 text-white text-sm px-2 py-1 font-black whitespace-nowrap shadow-[2px_2px_0px_#222222] border-2 border-[#222222] dark:border-transparent">
                 해결됨
@@ -99,7 +99,7 @@ export default async function CommunityDetailPage({
           </h2>
         </div>
 
-        <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-[#222222] dark:bg-[#EAEAEA] text-[#F5F4F0] dark:text-[#121212] font-black flex items-center justify-center text-sm">
               {post.profiles?.nickname ? post.profiles.nickname.charAt(0).toUpperCase() : "U"}
@@ -123,7 +123,7 @@ export default async function CommunityDetailPage({
           </div>
         </div>
 
-        <div className="p-8 min-h-[300px] text-[16px] leading-relaxed text-[#222222] dark:text-[#EAEAEA] font-medium">
+        <div className="p-4 sm:p-6 md:p-8 min-h-[200px] md:min-h-[300px] text-[15px] md:text-[16px] leading-relaxed text-[#222222] dark:text-[#EAEAEA] font-medium">
           {/* WYSIWYG 에디터가 생성한 순수 HTML을 그대로 렌더링합니다 */}
           <div 
             className="wysiwyg-content"

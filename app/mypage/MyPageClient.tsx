@@ -35,12 +35,12 @@ export default function MyPageClient({ initialUser, initialProfile, initialPosts
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 space-y-12">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-12 lg:py-20 space-y-8 md:space-y-12">
       
       {/* 1. 상단 프로필 헤더 (진짜 데이터 연동) */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b-4 border-[#222222] dark:border-[#444444] pb-8">
         <div className="flex items-center gap-6">
-          <div className="w-20 h-20 md:w-24 md:h-24 bg-[#222222] dark:bg-[#EAEAEA] text-[#F5F4F0] dark:text-[#121212] flex items-center justify-center text-4xl font-black border-4 border-[#222222] dark:border-[#EAEAEA] shadow-[4px_4px_0px_#A0A0A0] dark:shadow-[4px_4px_0px_#111111]">
+          <div className="w-16 h-16 md:w-24 md:h-24 shrink-0 bg-[#222222] dark:bg-[#EAEAEA] text-[#F5F4F0] dark:text-[#121212] flex items-center justify-center text-3xl md:text-4xl font-black border-4 border-[#222222] dark:border-[#EAEAEA] shadow-[4px_4px_0px_#A0A0A0] dark:shadow-[4px_4px_0px_#111111]">
             {initialProfile?.nickname ? initialProfile.nickname.charAt(0).toUpperCase() : "U"}
           </div>
           <div>
@@ -175,7 +175,7 @@ export default function MyPageClient({ initialUser, initialProfile, initialPosts
             ))}
           </nav>
 
-          <div className="p-0">
+          <div className="p-0 overflow-x-auto">
             {activeTab === "나의 활동" && (
               <table className="w-full text-left border-collapse whitespace-nowrap min-w-full">
                 <thead>

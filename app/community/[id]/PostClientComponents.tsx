@@ -82,7 +82,7 @@ export function LikeButton({ postId, initialLikes, initialUser }: { postId: stri
   };
 
   return (
-    <div className="flex justify-center py-10 border-t-2 border-dashed border-[#E5E4E0] dark:border-[#333333]">
+    <div className="flex justify-center py-6 md:py-10 border-t-2 border-dashed border-[#E5E4E0] dark:border-[#333333]">
       <button onClick={handleToggleLike} className={`flex flex-col items-center justify-center w-24 h-24 border-2 transition-all hover:-translate-y-1 ${liked ? 'border-blue-600 bg-blue-50 dark:bg-[#1A233A] text-blue-600 dark:text-blue-400 shadow-[4px_4px_0px_#2563eb]' : 'border-[#222222] dark:border-[#EAEAEA] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#EAEAEA]'}`}>
         <span className={`material-symbols-outlined text-3xl mb-1 ${liked ? 'fill-current' : ''}`}>thumb_up</span>
         <span className="font-black text-lg">{likesCount}</span>
@@ -189,8 +189,7 @@ export function CommentSection({
         댓글 <span className="text-blue-600 dark:text-blue-400">{comments.length}</span>
       </h3>
       
-      {/* ⭐️ 최상위 댓글 작성 폼 */}
-      <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-2 mb-8">
+      <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-2 mb-6 md:mb-8">
         <textarea value={commentInput} onChange={(e) => setCommentInput(e.target.value)} placeholder={user ? "상호 존중하는 댓글 문화를 만들어가요." : "로그인 후 댓글을 작성할 수 있습니다."} disabled={!user} className="flex-1 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] p-4 resize-none h-24 outline-none disabled:opacity-50 font-medium" />
         <button type="submit" disabled={isSubmitting || !user} className="md:w-32 bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] font-black text-sm py-4 md:py-0 disabled:opacity-50">등록</button>
       </form>

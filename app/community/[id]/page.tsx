@@ -63,6 +63,13 @@ export default async function CommunityDetailPage({
     .select("*", { count: 'exact', head: true })
     .eq("post_id", postId);
 
+  // 4. 현재 유저 역할 가져오기 (관리자 여부 확인)
+  let currentUserRole = "user";
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role) currentUserRole = profile.role;
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-12 lg:py-20 space-y-6 md:space-y-8">
       
@@ -124,31 +131,51 @@ export default async function CommunityDetailPage({
         </div>
 
         <div className="p-4 sm:p-6 md:p-8 min-h-[200px] md:min-h-[300px] text-[15px] md:text-[16px] leading-relaxed text-[#222222] dark:text-[#EAEAEA] font-medium">
-          {/* WYSIWYG 에디터가 생성한 순수 HTML을 그대로 렌더링합니다 */}
-          <div 
-            className="wysiwyg-content"
-            dangerouslySetInnerHTML={{ __html: post.content }}
-          />
-          {/* WYSIWYG 스타일 대응 */}
-          <style dangerouslySetInnerHTML={{__html: `
-            .wysiwyg-content p { margin-bottom: 1.25rem; white-space: pre-wrap; }
-            .wysiwyg-content strong { font-weight: 900; }
-            .wysiwyg-content em { font-style: italic; }
-            .wysiwyg-content u { text-decoration: underline; }
-            .wysiwyg-content img { max-width: 100%; border-radius: 0.375rem; border: 2px solid #222222; box-shadow: 4px 4px 0px #222222; margin: 1.5rem 0; }
-            .dark .wysiwyg-content img { border-color: #444444; box-shadow: 4px 4px 0px #111111; }
-            .wysiwyg-content h1 { font-size: 2.25rem; font-weight: 900; margin-top: 2rem; margin-bottom: 1rem; }
-            .wysiwyg-content h2 { font-size: 1.875rem; font-weight: 900; margin-top: 2rem; margin-bottom: 1rem; }
-          `}} />
+          {post.is_hidden && currentUserRole !== 'admin' && currentUserRole !== 'manager' ? (
+             <div className="flex flex-col items-center justify-center text-[#A0A0A0] h-full py-20 gap-2">
+               <span className="material-symbols-outlined text-4xl">visibility_off</span>
+               <p className="font-bold">🚫 관리자에 의해 숨김 처리된 게시물입니다.</p>
+             </div>
+          ) : (
+            <>
+              {post.is_hidden && (
+                <div className="mb-4 p-3 bg-red-100 text-red-600 font-bold border-2 border-red-600 text-sm flex items-center gap-2">
+                  <span className="material-symbols-outlined">warning</span>
+                  이 게시물은 숨김 처리되어 일반 유저에게 보이지 않습니다.
+                </div>
+              )}
+              {/* WYSIWYG 에디터가 생성한 순수 HTML을 그대로 렌더링합니다 */}
+              <div 
+                className="wysiwyg-content"
+                dangerouslySetInnerHTML={{ __html: post.content }}
+              />
+              {/* WYSIWYG 스타일 대응 */}
+              <style dangerouslySetInnerHTML={{__html: `
+                .wysiwyg-content p { margin-bottom: 1.25rem; white-space: pre-wrap; }
+                .wysiwyg-content strong { font-weight: 900; }
+                .wysiwyg-content em { font-style: italic; }
+                .wysiwyg-content u { text-decoration: underline; }
+                .wysiwyg-content img { max-width: 100%; border-radius: 0.375rem; border: 2px solid #222222; box-shadow: 4px 4px 0px #222222; margin: 1.5rem 0; }
+                .dark .wysiwyg-content img { border-color: #444444; box-shadow: 4px 4px 0px #111111; }
+                .wysiwyg-content h1 { font-size: 2.25rem; font-weight: 900; margin-top: 2rem; margin-bottom: 1rem; }
+                .wysiwyg-content h2 { font-size: 1.875rem; font-weight: 900; margin-top: 2rem; margin-bottom: 1rem; }
+              `}} />
+            </>
+          )}
         </div>
 
         {/* ⭐️ 좋아요 버튼 (클라이언트 컴포넌트) */}
         <LikeButton postId={postId} initialLikes={likesCount || 0} initialUser={user} />
       </div>
 
-      {/* ⭐️ 작성자 전용 액션 (클라이언트 컴포넌트) */}
-      {user?.id === post.author_id && (
-        <PostActionButtons postId={postId} />
+      {/* ⭐️ 작성자 및 관리자 전용 액션 (클라이언트 컴포넌트) */}
+      {(user?.id === post.author_id || currentUserRole === "admin" || currentUserRole === "manager") && (
+        <PostActionButtons 
+          postId={postId} 
+          isHidden={post.is_hidden || false} 
+          currentUserRole={currentUserRole} 
+          isAuthor={user?.id === post.author_id} 
+        />
       )}
 
       {/* ⭐️ 댓글 섹션 (클라이언트 컴포넌트) */}
@@ -159,6 +186,7 @@ export default async function CommunityDetailPage({
         postAuthorId={post.author_id}
         isResolved={post.is_resolved}
         initialUser={user}
+        currentUserRole={currentUserRole}
       />
 
     </div>

@@ -58,6 +58,14 @@ export async function createPost(
     return { success: false, message: "로그인이 필요합니다." };
   }
 
+  // ⭐️ 공지사항 관리자 권한 방어 로직
+  if (boardType === "공지사항") {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role !== "admin") {
+      return { success: false, message: "공지사항은 총괄 관리자(ADMIN)만 작성할 수 있습니다." };
+    }
+  }
+
   // 1. 게시글 삽입
   const { data: post, error: insertError } = await supabase.from("posts").insert([{
     title,
@@ -132,20 +140,25 @@ export async function deletePost(postId: string) {
 
   if (!user) return { success: false, message: "로그인이 필요합니다." };
 
-  const { data: deletedRows, error: deleteError } = await supabase
-    .from("posts")
-    .delete()
-    .eq("id", postId)
-    .eq("author_id", user.id)
-    .select();
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
 
-  if (deleteError || !deletedRows || deletedRows.length === 0) {
-    console.error("게시글 삭제 실패:", deleteError || "0 rows deleted (RLS or mismatch)");
+  const { data: post } = await supabase.from("posts").select("author_id").eq("id", postId).single();
+  if (!post) return { success: false, message: "게시글을 찾을 수 없습니다." };
+  
+  if (!isAdmin && post.author_id !== user.id) {
+    return { success: false, message: "삭제 권한이 없습니다." };
+  }
+
+  const { error: deleteError } = await supabase.from("posts").delete().eq("id", postId);
+
+  if (deleteError) {
+    console.error("게시글 삭제 실패:", deleteError);
     return { success: false, message: "게시글 삭제에 실패했습니다." };
   }
 
-  // ⭐️ 삭제 완료 시 잉크 회수
-  await adjustInk(supabase, user.id, -30);
+  // ⭐️ 삭제 완료 시 작성자의 잉크 회수
+  await adjustInk(supabase, post.author_id, -30);
 
   revalidatePath("/community");
   revalidatePath("/");
@@ -161,17 +174,23 @@ export async function deleteComment(commentId: string, postId: string) {
 
   if (!user) return { success: false, message: "로그인이 필요합니다." };
 
-  const { error: deleteError } = await supabase
-    .from("comments")
-    .delete()
-    .eq("id", commentId)
-    .eq("author_id", user.id);
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
+
+  const { data: comment } = await supabase.from("comments").select("author_id").eq("id", commentId).single();
+  if (!comment) return { success: false, message: "댓글을 찾을 수 없습니다." };
+
+  if (!isAdmin && comment.author_id !== user.id) {
+    return { success: false, message: "삭제 권한이 없습니다." };
+  }
+
+  const { error: deleteError } = await supabase.from("comments").delete().eq("id", commentId);
 
   if (deleteError) {
     return { success: false, message: "댓글 삭제에 실패했습니다." };
   }
 
-  await adjustInk(supabase, user.id, -5);
+  await adjustInk(supabase, comment.author_id, -5);
   revalidatePath(`/community/${postId}`);
 
   return { success: true, message: "댓글이 삭제되고 5 Ink가 회수되었습니다." };
@@ -323,4 +342,47 @@ export async function toggleLikeAction(postId: string) {
   revalidatePath("/community");
   
   return { success: true, liked: !existingLike };
+}
+
+// --- ⭐️ 게시글 숨기기 토글 서버 액션 (관리자 전용) ---
+export async function toggleHidePost(postId: string) {
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "로그인이 필요합니다." };
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "admin" && profile?.role !== "manager") {
+    return { success: false, message: "권한이 없습니다." };
+  }
+
+  const { data: post } = await supabase.from("posts").select("is_hidden").eq("id", postId).single();
+  if (!post) return { success: false, message: "게시글을 찾을 수 없습니다." };
+
+  const { error } = await supabase.from("posts").update({ is_hidden: !post.is_hidden }).eq("id", postId);
+  if (error) return { success: false, message: "숨김 상태 변경에 실패했습니다." };
+
+  revalidatePath(`/community/${postId}`);
+  revalidatePath("/community");
+  return { success: true, isHidden: !post.is_hidden };
+}
+
+// --- ⭐️ 댓글 숨기기 토글 서버 액션 (관리자 전용) ---
+export async function toggleHideComment(commentId: string, postId: string) {
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, message: "로그인이 필요합니다." };
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "admin" && profile?.role !== "manager") {
+    return { success: false, message: "권한이 없습니다." };
+  }
+
+  const { data: comment } = await supabase.from("comments").select("is_hidden").eq("id", commentId).single();
+  if (!comment) return { success: false, message: "댓글을 찾을 수 없습니다." };
+
+  const { error } = await supabase.from("comments").update({ is_hidden: !comment.is_hidden }).eq("id", commentId);
+  if (error) return { success: false, message: "숨김 상태 변경에 실패했습니다." };
+
+  revalidatePath(`/community/${postId}`);
+  return { success: true, isHidden: !comment.is_hidden };
 }

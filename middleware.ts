@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
 
   // 2. 프로필 유무 확인 로직 (로그인했는데 프로필이 없다면 무조건 /welcome으로 강제 이동)
   if (user) {
-    const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).single();
+    const { data: profile } = await supabase.from('profiles').select('id, role').eq('id', user.id).single();
     
     // 프로필이 없고, 현재 접속하려는 곳이 /welcome이나 로그아웃이 아닐 경우
     if (!profile && pathname !== '/welcome' && !pathname.startsWith('/auth/')) {
@@ -37,10 +37,31 @@ export async function middleware(request: NextRequest) {
       });
       return redirectResponse;
     }
+
+    // [관리자 구역 접근 제어]
+    if (pathname.startsWith('/admin')) {
+      if (!profile || profile.role === 'user' || !profile.role) {
+        url.pathname = '/';
+        const redirectResponse = NextResponse.redirect(url);
+        supabaseResponse.cookies.getAll().forEach((cookie) => {
+          redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
+      }
+
+      if (pathname.startsWith('/admin/users') && profile.role !== 'admin') {
+        url.pathname = '/admin/posts';
+        const redirectResponse = NextResponse.redirect(url);
+        supabaseResponse.cookies.getAll().forEach((cookie) => {
+          redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
+      }
+    }
   }
 
   // 3. [비로그인 유저 접근 금지 구역] 설정
-  const protectedRoutes = ['/mypage', '/community/write'];
+  const protectedRoutes = ['/mypage', '/community/write', '/admin'];
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
 
   if (isProtectedRoute && !user) {

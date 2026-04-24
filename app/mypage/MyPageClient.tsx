@@ -102,6 +102,15 @@ export default function MyPageClient({ initialUser, initialProfile, initialPosts
 
         {!isEditing && (
           <div className="flex gap-2">
+            {(initialProfile?.role === "admin" || initialProfile?.role === "manager") && (
+              <Link 
+                href="/admin"
+                className="px-5 py-2.5 bg-red-600 border-2 border-[#222222] dark:border-[#EAEAEA] text-white font-black text-sm shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[18px]">shield</span>
+                관리자 대시보드
+              </Link>
+            )}
             <button 
               onClick={() => setIsEditing(true)}
               className="px-5 py-2.5 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] font-bold text-sm hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A] transition-colors shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"

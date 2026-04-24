@@ -105,7 +105,8 @@ export function CommentSection({
   boardType?: string,
   postAuthorId?: string,
   isResolved?: boolean,
-  initialUser?: any
+  initialUser?: any,
+  currentUserRole?: string
 }) {
   const [comments, setComments] = useState(initialComments);
   const [commentInput, setCommentInput] = useState("");
@@ -180,6 +181,41 @@ export function CommentSection({
     }
   };
 
+  const handleToggleHideComment = async (commentId: string, currentHidden: boolean) => {
+    const actionName = currentHidden ? "숨김 해제" : "숨기기";
+    if (confirm(`이 댓글을 ${actionName} 하시겠습니까?`)) {
+      try {
+        const { toggleHideComment } = await import("../actions");
+        const result = await toggleHideComment(commentId, postId);
+        if (result.success) {
+          setComments(prev => prev.map(c => c.id === commentId ? { ...c, is_hidden: result.isHidden } : c));
+          alert(`댓글이 ${actionName} 되었습니다.`);
+        } else {
+          alert(result.message);
+        }
+      } catch (error: any) {
+        alert("오류가 발생했습니다.");
+      }
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (confirm("이 댓글을 영구적으로 삭제하시겠습니까?")) {
+      try {
+        const { deleteComment } = await import("../actions");
+        const result = await deleteComment(commentId, postId);
+        if (result.success) {
+          setComments(prev => prev.filter(c => c.id !== commentId));
+          alert(result.message);
+        } else {
+          alert(result.message);
+        }
+      } catch (error: any) {
+        alert("오류가 발생했습니다.");
+      }
+    }
+  };
+
   const rootComments = comments.filter(c => !c.parent_id);
   const getReplies = (parentId: string) => comments.filter(c => c.parent_id === parentId);
 
@@ -215,9 +251,18 @@ export function CommentSection({
                 {new Date(comment.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
-            <p className="text-[14px] text-[#222222] dark:text-[#EAEAEA] font-medium whitespace-pre-wrap mb-3">{comment.content}</p>
+            {comment.is_hidden && currentUserRole !== 'admin' && currentUserRole !== 'manager' ? (
+              <p className="text-[14px] text-[#A0A0A0] font-bold italic mb-3">🚫 숨김 처리된 댓글입니다.</p>
+            ) : (
+              <>
+                {comment.is_hidden && (
+                  <span className="text-xs text-red-500 font-bold mb-1 block">[숨김 처리됨]</span>
+                )}
+                <p className="text-[14px] text-[#222222] dark:text-[#EAEAEA] font-medium whitespace-pre-wrap mb-3">{comment.content}</p>
+              </>
+            )}
 
-            {/* 답글 달기 버튼 */}
+            {/* 하단 버튼 (답글 달기 및 관리자 액션) */}
             <div className="flex items-center gap-4">
               <button 
                 onClick={() => {
@@ -228,6 +273,22 @@ export function CommentSection({
               >
                 <span className="material-symbols-outlined text-[14px]">reply</span> 답글 달기
               </button>
+              {(currentUserRole === "admin" || currentUserRole === "manager" || user?.id === comment.author_id) && (
+                <button 
+                  onClick={() => handleDeleteComment(comment.id)}
+                  className="text-[12px] font-bold text-red-500 hover:text-red-700 transition-colors"
+                >
+                  삭제
+                </button>
+              )}
+              {(currentUserRole === "admin" || currentUserRole === "manager") && (
+                <button 
+                  onClick={() => handleToggleHideComment(comment.id, comment.is_hidden)}
+                  className="text-[12px] font-bold text-orange-500 hover:text-orange-700 transition-colors"
+                >
+                  {comment.is_hidden ? "숨김 해제" : "숨기기"}
+                </button>
+              )}
             </div>
 
             {/* 대댓글(답글) 리스트 */}
@@ -237,11 +298,26 @@ export function CommentSection({
                   <div key={reply.id} className="pt-4 border-t border-[#E5E4E0] dark:border-[#333333] first:border-0 first:pt-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-[#222222] dark:text-[#EAEAEA] text-[13px]">{reply.profiles?.nickname || "익명"}</span>
-                      <span className="text-[10px] font-bold text-[#A0A0A0]">
-                        {new Date(reply.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-[#A0A0A0]">
+                          {new Date(reply.created_at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {(currentUserRole === "admin" || currentUserRole === "manager" || user?.id === reply.author_id) && (
+                          <button onClick={() => handleDeleteComment(reply.id)} className="text-[10px] text-red-500 hover:underline">삭제</button>
+                        )}
+                        {(currentUserRole === "admin" || currentUserRole === "manager") && (
+                          <button onClick={() => handleToggleHideComment(reply.id, reply.is_hidden)} className="text-[10px] text-orange-500 hover:underline">{reply.is_hidden ? "해제" : "숨김"}</button>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-[13px] text-[#222222] dark:text-[#EAEAEA] font-medium whitespace-pre-wrap">{reply.content}</p>
+                    {reply.is_hidden && currentUserRole !== 'admin' && currentUserRole !== 'manager' ? (
+                      <p className="text-[13px] text-[#A0A0A0] font-bold italic">🚫 숨김 처리됨</p>
+                    ) : (
+                      <>
+                        {reply.is_hidden && <span className="text-[10px] text-red-500 font-bold block">[숨김]</span>}
+                        <p className="text-[13px] text-[#222222] dark:text-[#EAEAEA] font-medium whitespace-pre-wrap">{reply.content}</p>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -27,6 +27,27 @@ function WriteEditorForm() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState<string>(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function checkRole() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      setIsAdmin(profile?.role === 'admin');
+    }
+    checkRole();
+  }, []);
+
+  useEffect(() => {
+    if (boardName === "공지사항" && isAdmin === false) {
+      alert("공지사항은 총괄 관리자(ADMIN)만 작성할 수 있습니다.");
+      router.push("/community/write?board=자유게시판");
+    }
+  }, [boardName, isAdmin, router]);
 
   // 이미지 업로드 로직 (TiptapEditor에 전달됨)
   const handleImageUpload = async (file: File): Promise<string> => {

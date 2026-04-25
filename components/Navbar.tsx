@@ -5,6 +5,7 @@ import { useSelectedLayoutSegment, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import NotificationBell from "./NotificationBell";
 
 export default function Navbar({ initialUser, initialProfile }: { initialUser?: any, initialProfile?: any }) {
   const { theme, setTheme } = useTheme();
@@ -133,6 +134,9 @@ export default function Navbar({ initialUser, initialProfile }: { initialUser?: 
                   </Link>
                 )}
                 
+                {/* 🔔 알림 벨 */}
+                {user && <NotificationBell userId={user.id} />}
+
                 <Link href="/community/write" className="bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-2 md:px-4 py-1.5 md:py-1.5 text-xs md:text-sm font-black shadow-[2px_2px_0px_#A0A0A0] dark:shadow-[2px_2px_0px_#111111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px] md:text-[16px]">edit</span> 
                   <span className="hidden sm:inline">글쓰기</span>

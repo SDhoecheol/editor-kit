@@ -128,6 +128,57 @@ export async function createComment(postId: string, content: string, parentId?: 
     return { success: false, message: "잉크 보상 오류로 댓글 작성이 취소되었습니다." };
   }
 
+  // 3. ⭐️ 알림 생성 로직
+  try {
+    const commenterNickname = (comment as any).profiles?.nickname || "익명";
+    const contentPreview = content.length > 50 ? content.substring(0, 50) + "…" : content;
+
+    if (parentId) {
+      // 대댓글(답글)인 경우 → 부모 댓글 작성자에게 알림
+      const { data: parentComment } = await supabase
+        .from("comments")
+        .select("author_id")
+        .eq("id", parentId)
+        .single();
+
+      if (parentComment && parentComment.author_id !== user.id) {
+        // 게시글 제목도 가져오기
+        const { data: post } = await supabase.from("posts").select("title").eq("id", postId).single();
+        await supabase.from("notifications").insert([{
+          user_id: parentComment.author_id,
+          type: "reply",
+          post_id: postId,
+          post_title: post?.title || "",
+          triggered_by: user.id,
+          triggered_by_nickname: commenterNickname,
+          message: contentPreview,
+        }]);
+      }
+    } else {
+      // 일반 댓글인 경우 → 게시글 작성자에게 알림
+      const { data: post } = await supabase
+        .from("posts")
+        .select("author_id, title")
+        .eq("id", postId)
+        .single();
+
+      if (post && post.author_id !== user.id) {
+        await supabase.from("notifications").insert([{
+          user_id: post.author_id,
+          type: "comment",
+          post_id: postId,
+          post_title: post.title || "",
+          triggered_by: user.id,
+          triggered_by_nickname: commenterNickname,
+          message: contentPreview,
+        }]);
+      }
+    }
+  } catch (notiError) {
+    // 알림 생성 실패가 댓글 작성 자체를 막아서는 안 됨
+    console.warn("알림 생성 실패 (무시):", notiError);
+  }
+
   revalidatePath(`/community/${postId}`);
   
   return { success: true, message: "댓글이 등록되고 5 Ink가 지급되었습니다.", comment };

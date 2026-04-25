@@ -98,7 +98,8 @@ export function CommentSection({
   boardType,
   postAuthorId,
   isResolved,
-  initialUser
+  initialUser,
+  currentUserRole
 }: { 
   postId: string, 
   initialComments: any[],

@@ -25,8 +25,8 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          // 로그인 완료 후 돌아올 주소 (현재 도메인의 루트)
-          redirectTo: `${window.location.origin}/auth/callback`, 
+          // ⭐️ 환경변수를 우선 사용하여 배포 환경에서 localhost로 빠지는 버그 방지
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`, 
         },
       });
 

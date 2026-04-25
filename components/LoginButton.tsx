@@ -45,7 +45,8 @@ export default function LoginButton() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}/auth/callback`,
+        // ⭐️ 환경변수를 우선 사용하여 배포 환경에서 localhost로 빠지는 버그 방지
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || location.origin}/auth/callback`,
       },
     });
   };

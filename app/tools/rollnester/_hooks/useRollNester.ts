@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { parsePdfDimensions, generateNestedPdf, MarkOption } from "../_lib/PdfProcessor";
-import { packItems, PackItem, PlacedItem } from "../_lib/NestingEngine";
+import type { MarkOption } from "../_lib/PdfProcessor";
+import type { PackItem, PlacedItem } from "../_lib/NestingEngine";
 
 export interface UploadedFile {
   id: string;
@@ -30,7 +30,7 @@ export function useRollNester() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 알고리즘 실행: 파일 리스트, 용지폭, 여백이 변경될 때마다 자동 재조판
+  // 알고리즘 실행: 파일 리스트, 용지폭, 여백이 변경될 때마다 자동 재조판 (서버 오프로딩)
   useEffect(() => {
     if (files.length === 0) {
       setPlacedItems([]);
@@ -52,17 +52,25 @@ export function useRollNester() {
       }
     });
 
-    // 마크 옵션에 따른 캔버스 외곽 여백(좌우 15mm씩 총 30mm)을 제외한 '실제 조판 가능 폭' 계산
     const marginMm = markOption === 'none' ? 0 : 15;
     const effectiveMaxWidth = Math.max(1, maxRollWidth - (marginMm * 2));
 
-    const result = packItems(itemsToPack, effectiveMaxWidth, gutter);
-    setPlacedItems(result.placedItems);
-    setTotalWidth(result.totalWidth);
-    setTotalHeight(result.totalHeight);
+    fetch('/tools/rollnester/api/pack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemsToPack, effectiveMaxWidth, gutter })
+    })
+    .then(res => res.json())
+    .then(result => {
+      if (result.error) throw new Error(result.error);
+      setPlacedItems(result.placedItems);
+      setTotalWidth(result.totalWidth);
+      setTotalHeight(result.totalHeight);
+    })
+    .catch(err => console.error("Packing error:", err));
   }, [files, maxRollWidth, gutter, markOption]);
 
-  // 미리보기 PDF 생성 (하리꼬미와 동일한 디바운스 패턴 적용)
+  // 미리보기 PDF 생성 (서버 오프로딩)
   useEffect(() => {
     if (placedItems.length === 0) {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -75,11 +83,35 @@ export function useRollNester() {
 
     timerRef.current = setTimeout(async () => {
       try {
-        const fileBuffers: Record<string, ArrayBuffer> = {};
-        files.forEach(f => fileBuffers[f.fileId] = f.buffer);
+        const formData = new FormData();
+        formData.append('payload', JSON.stringify({
+          placedItems,
+          totalWidthMm: totalWidth,
+          totalHeightMm: totalHeight,
+          markOption
+        }));
+        
+        // 중복 파일 전송을 막기 위해 Set으로 관리
+        const addedFiles = new Set<string>();
+        files.forEach(f => {
+          if (!addedFiles.has(f.fileId)) {
+            const blob = new Blob([f.buffer], { type: "application/pdf" });
+            formData.append(`file_${f.fileId}`, blob, f.name);
+            addedFiles.add(f.fileId);
+          }
+        });
 
-        const pdfBytes = await generateNestedPdf(placedItems, fileBuffers, totalWidth, totalHeight, markOption);
-        const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
+        const res = await fetch('/tools/rollnester/api/generate', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP error ${res.status}`);
+        }
+
+        const blob = await res.blob();
         const url = URL.createObjectURL(blob);
 
         setPreviewUrl(prev => {
@@ -91,12 +123,12 @@ export function useRollNester() {
       } finally {
         setIsGenerating(false);
       }
-    }, 400);
+    }, 800); // 네트워크 딜레이를 고려해 디바운스를 800ms로 늘림
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placedItems, totalWidth, totalHeight, markOption]);
 
-  // PDF 업로드 및 파싱
+  // PDF 업로드 및 파싱 (서버 오프로딩)
   const handleFileUpload = useCallback(async (uploadedFiles: FileList | File[]) => {
     const newFiles: UploadedFile[] = [];
     
@@ -107,18 +139,29 @@ export function useRollNester() {
         continue;
       }
 
-      const buffer = await file.arrayBuffer();
-      
       try {
-        // 1. 치수 파싱 (다중 페이지 지원)
-        const pagesDimensions = await parsePdfDimensions(buffer);
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const res = await fetch('/tools/rollnester/api/parse', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to parse");
+        }
+
+        const buffer = await file.arrayBuffer();
         const physicalFileId = Math.random().toString(36).substring(7);
         
-        pagesDimensions.forEach((dim, index) => {
+        data.dimensions.forEach((dim: any, index: number) => {
           newFiles.push({
             id: Math.random().toString(36).substring(7),
             fileId: physicalFileId,
-            name: pagesDimensions.length > 1 ? `${file.name} (P.${index + 1})` : file.name,
+            name: data.dimensions.length > 1 ? `${file.name} (P.${index + 1})` : file.name,
             buffer,
             pageIndex: index,
             widthMm: Number(dim.widthMm.toFixed(1)),
@@ -126,9 +169,9 @@ export function useRollNester() {
             quantity: 1,
           });
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("PDF Parse Error:", err);
-        alert(`${file.name} 파싱 중 오류가 발생했습니다.`);
+        alert(`${file.name} 파싱 중 오류가 발생했습니다: ${err.message}`);
       }
     }
     
@@ -160,17 +203,39 @@ export function useRollNester() {
     setFiles(prev => prev.filter(f => f.id !== id));
   }, []);
 
-  // PDF 출력 내보내기
+  // PDF 출력 내보내기 (서버 오프로딩)
   const handleExport = useCallback(async () => {
     if (placedItems.length === 0) return alert("조판할 스티커가 없습니다.");
     setIsExporting(true);
     try {
-      const fileBuffers: Record<string, ArrayBuffer> = {};
-      files.forEach(f => fileBuffers[f.fileId] = f.buffer);
-
-      const pdfBytes = await generateNestedPdf(placedItems, fileBuffers, totalWidth, totalHeight, markOption);
+      const formData = new FormData();
+      formData.append('payload', JSON.stringify({
+        placedItems,
+        totalWidthMm: totalWidth,
+        totalHeightMm: totalHeight,
+        markOption
+      }));
       
-      const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
+      const addedFiles = new Set<string>();
+      files.forEach(f => {
+        if (!addedFiles.has(f.fileId)) {
+          const blob = new Blob([f.buffer], { type: "application/pdf" });
+          formData.append(`file_${f.fileId}`, blob, f.name);
+          addedFiles.add(f.fileId);
+        }
+      });
+
+      const res = await fetch('/tools/rollnester/api/generate', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error ${res.status}`);
+      }
+
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       
@@ -180,9 +245,9 @@ export function useRollNester() {
       a.download = `${today}_${files.length}종_${totalQty}개_실사출력.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("PDF 생성 중 오류가 발생했습니다.");
+      alert(`PDF 생성 중 오류가 발생했습니다: ${err.message}`);
     } finally {
       setIsExporting(false);
     }

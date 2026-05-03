@@ -1,3 +1,5 @@
+import "server-only";
+
 export interface PackItem {
   id: string;        // 고유 ID (파일 ID + 인덱스)
   fileId: string;    // 원본 파일 식별자

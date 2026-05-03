@@ -1,3 +1,4 @@
+import "server-only";
 import { PDFDocument, rgb } from 'pdf-lib';
 import type { PlacedItem } from './NestingEngine';
 
@@ -10,8 +11,32 @@ export type MarkOption = 'none' | 'corner' | 'crosshair';
  * 업로드된 PDF 파일의 각 페이지 크기를 mm 단위로 추출하여 배열로 반환합니다.
  */
 export async function parsePdfDimensions(fileBuffer: ArrayBuffer) {
+  // 1. Magic Number 검증 (%PDF-)
+  const view = new Uint8Array(fileBuffer);
+  if (
+    view.length < 5 ||
+    view[0] !== 0x25 || // %
+    view[1] !== 0x50 || // P
+    view[2] !== 0x44 || // D
+    view[3] !== 0x46 || // F
+    view[4] !== 0x2d    // -
+  ) {
+    throw new Error("Invalid file signature: Not a valid PDF.");
+  }
+
+  // 2. 최대 파일 크기 검증 (20MB)
+  if (fileBuffer.byteLength > 20 * 1024 * 1024) {
+    throw new Error("File is too large. Maximum size is 20MB.");
+  }
+
   const pdfDoc = await PDFDocument.load(fileBuffer);
   const pages = pdfDoc.getPages();
+  
+  // 3. 최대 페이지 수 제한 검증 (OOM 방지, 최대 50페이지)
+  if (pages.length > 50) {
+    throw new Error("Too many pages. Maximum allowed is 50 pages per file.");
+  }
+
   return pages.map(page => {
     const { width, height } = page.getSize();
     return {

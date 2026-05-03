@@ -201,7 +201,11 @@ export async function deletePost(postId: string) {
     return { success: false, message: "삭제 권한이 없습니다." };
   }
 
-  const { error: deleteError } = await supabase.from("posts").delete().eq("id", postId);
+  const { error: deleteError } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", postId)
+    .eq("author_id", isAdmin ? post.author_id : user.id); // Defense in Depth: 강제 ID 주입
 
   if (deleteError) {
     console.error("게시글 삭제 실패:", deleteError);
@@ -235,7 +239,11 @@ export async function deleteComment(commentId: string, postId: string) {
     return { success: false, message: "삭제 권한이 없습니다." };
   }
 
-  const { error: deleteError } = await supabase.from("comments").delete().eq("id", commentId);
+  const { error: deleteError } = await supabase
+    .from("comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("author_id", isAdmin ? comment.author_id : user.id); // Defense in Depth: 강제 ID 주입
 
   if (deleteError) {
     return { success: false, message: "댓글 삭제에 실패했습니다." };

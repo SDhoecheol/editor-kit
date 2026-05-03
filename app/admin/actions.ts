@@ -4,8 +4,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-// 유틸리티: 관리자/매니저 권한 체크
-async function checkAdminOrManager() {
+// 유틸리티: 오직 관리자만 체크
+async function checkStrictAdmin() {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,26 +29,17 @@ async function checkAdminOrManager() {
     .single();
 
   const role = profile?.role || "user";
-  if (role !== "admin" && role !== "manager") {
-    throw new Error("Forbidden: Requires Admin or Manager role");
-  }
-
-  return { supabase, role };
-}
-
-// 유틸리티: 오직 관리자만 체크
-async function checkStrictAdmin() {
-  const { supabase, role } = await checkAdminOrManager();
   if (role !== "admin") {
     throw new Error("Forbidden: Strictly Requires Admin role");
   }
+
   return { supabase, role };
 }
 
-// 액션: 게시물 강제 삭제 (admin, manager 둘 다 가능)
+// 액션: 게시물 강제 삭제 (admin만 가능)
 export async function deleteAnyPost(postIds: string[]) {
   try {
-    const { supabase } = await checkAdminOrManager();
+    const { supabase } = await checkStrictAdmin();
 
     // supabase client created without service role key cannot bypass RLS for delete if RLS is enabled and strictly scoped to author.
     // wait, we don't have SUPABASE_SERVICE_ROLE_KEY here! 

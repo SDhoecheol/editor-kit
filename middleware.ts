@@ -40,17 +40,8 @@ export async function middleware(request: NextRequest) {
 
     // [관리자 구역 접근 제어]
     if (pathname.startsWith('/admin')) {
-      if (!profile || profile.role === 'user' || !profile.role) {
+      if (!profile || profile.role !== 'admin') {
         url.pathname = '/';
-        const redirectResponse = NextResponse.redirect(url);
-        supabaseResponse.cookies.getAll().forEach((cookie) => {
-          redirectResponse.cookies.set(cookie.name, cookie.value);
-        });
-        return redirectResponse;
-      }
-
-      if (pathname.startsWith('/admin/users') && profile.role !== 'admin') {
-        url.pathname = '/admin/posts';
         const redirectResponse = NextResponse.redirect(url);
         supabaseResponse.cookies.getAll().forEach((cookie) => {
           redirectResponse.cookies.set(cookie.name, cookie.value);

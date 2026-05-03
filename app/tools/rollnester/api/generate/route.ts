@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     // 서버로 오프로딩된 로직 실행
     const pdfBytes = await generateNestedPdf(placedItems, fileBuffers, totalWidthMm, totalHeightMm, markOption);
 
-    return new NextResponse(pdfBytes, {
+    return new Response(pdfBytes as any, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

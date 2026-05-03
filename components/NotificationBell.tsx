@@ -15,6 +15,7 @@ interface Notification {
   created_at: string;
 }
 export default function NotificationBell({ userId, userRole }: { userId: string, userRole: string }) {
+  type NotificationType = "comment" | "reply" | "system";
 
   interface UnifiedNotification {
     id: string;

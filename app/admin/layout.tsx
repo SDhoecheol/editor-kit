@@ -58,6 +58,30 @@ export default async function AdminLayout({
               <span className="material-symbols-outlined">group</span>
               회원 관리
             </Link>
+            
+            <Link 
+              href="/admin/settings"
+              className="px-4 py-3 bg-[#F5F4F0] dark:bg-[#2A2A2A] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#555555] font-bold shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#222222] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center gap-3"
+            >
+              <span className="material-symbols-outlined">settings</span>
+              사이트 설정
+            </Link>
+
+            <Link 
+              href="/admin/banners"
+              className="px-4 py-3 bg-[#F5F4F0] dark:bg-[#2A2A2A] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#555555] font-bold shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#222222] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center gap-3"
+            >
+              <span className="material-symbols-outlined">view_carousel</span>
+              배너 관리
+            </Link>
+
+            <Link 
+              href="/admin/notices"
+              className="px-4 py-3 bg-[#F5F4F0] dark:bg-[#2A2A2A] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#555555] font-bold shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#222222] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center gap-3"
+            >
+              <span className="material-symbols-outlined">campaign</span>
+              공지/알림 관리
+            </Link>
           )}
         </nav>
 

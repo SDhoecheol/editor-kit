@@ -14,34 +14,86 @@ interface Notification {
   is_read: boolean;
   created_at: string;
 }
+export default function NotificationBell({ userId, userRole }: { userId: string, userRole: string }) {
 
-export default function NotificationBell({ userId }: { userId: string }) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  interface UnifiedNotification {
+    id: string;
+    type: NotificationType;
+    post_id?: string;
+    post_title?: string;
+    triggered_by_nickname?: string;
+    message: string;
+    is_read: boolean;
+    created_at: string;
+  }
+
+  const [notifications, setNotifications] = useState<UnifiedNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 알림 목록 불러오기
+  // 알림 목록 불러오기 (유저 알림 + 시스템 알림 결합)
   const fetchNotifications = useCallback(async () => {
-    const { data, error } = await supabase
+    // 1. 유저 알림
+    const { data: userNotis } = await supabase
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(30);
 
-    if (!error && data) {
-      setNotifications(data);
-      setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
+    // 2. 시스템 공지 (활성화된 것 중 해당 유저의 롤에 맞는 것)
+    const { data: systemNotices } = await supabase
+      .from("system_notices")
+      .select("*")
+      .eq("is_active", true)
+      .in("target_role", ["all", userRole])
+      .order("created_at", { ascending: false });
+
+    // 3. 사용자가 읽은 시스템 공지 id 가져오기
+    const { data: readRecords } = await supabase
+      .from("user_notice_reads")
+      .select("notice_id")
+      .eq("user_id", userId);
+
+    const readNoticeIds = new Set(readRecords?.map((r) => r.notice_id) || []);
+
+    const combined: UnifiedNotification[] = [];
+    
+    if (userNotis) {
+      combined.push(...userNotis.map(n => ({
+        id: n.id,
+        type: n.type as NotificationType,
+        post_id: n.post_id,
+        post_title: n.post_title,
+        triggered_by_nickname: n.triggered_by_nickname,
+        message: n.message,
+        is_read: n.is_read,
+        created_at: n.created_at
+      })));
     }
-  }, [userId]);
+
+    if (systemNotices) {
+      combined.push(...systemNotices.map(n => ({
+        id: n.id,
+        type: "system" as NotificationType,
+        post_title: n.title,
+        message: n.message,
+        is_read: readNoticeIds.has(n.id),
+        created_at: n.created_at
+      })));
+    }
+
+    // 최신순 정렬
+    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    setNotifications(combined);
+    setUnreadCount(combined.filter((n) => !n.is_read).length);
+  }, [userId, userRole]);
 
   useEffect(() => {
     fetchNotifications();
-
-    // 30초마다 폴링으로 새 알림 체크
     const interval = setInterval(fetchNotifications, 30000);
-
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
@@ -57,20 +109,18 @@ export default function NotificationBell({ userId }: { userId: string }) {
   }, []);
 
   // 개별 알림 읽음 처리
-  const markAsRead = async (notificationId: string) => {
+  const markAsRead = async (notificationId: string, type: NotificationType) => {
     const target = notifications.find(n => n.id === notificationId);
     if (!target || target.is_read) return;
 
-    // 낙관적 업데이트
-    setNotifications(prev =>
-      prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
-    );
+    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
 
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("id", notificationId);
+    if (type === "system") {
+      await supabase.from("user_notice_reads").insert([{ user_id: userId, notice_id: notificationId }]);
+    } else {
+      await supabase.from("notifications").update({ is_read: true }).eq("id", notificationId);
+    }
   };
 
   // 전체 읽음 처리
@@ -78,11 +128,15 @@ export default function NotificationBell({ userId }: { userId: string }) {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     setUnreadCount(0);
 
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("user_id", userId)
-      .eq("is_read", false);
+    const unreadSystem = notifications.filter(n => n.type === "system" && !n.is_read);
+    
+    // 비동기 처리
+    supabase.from("notifications").update({ is_read: true }).eq("user_id", userId).eq("is_read", false).then();
+    
+    if (unreadSystem.length > 0) {
+      const inserts = unreadSystem.map(n => ({ user_id: userId, notice_id: n.id }));
+      supabase.from("user_notice_reads").insert(inserts).then();
+    }
   };
 
   // 시간 포맷
@@ -154,15 +208,15 @@ export default function NotificationBell({ userId }: { userId: string }) {
               notifications.map((noti) => (
                 <Link
                   key={noti.id}
-                  href={`/community/${noti.post_id}`}
-                  onClick={() => {
-                    markAsRead(noti.id);
+                  href={noti.type === "system" ? "#" : `/community/${noti.post_id}`}
+                        onClick={() => {
+                    markAsRead(noti.id, noti.type);
                     setIsOpen(false);
                   }}
                   className={`block px-4 py-3 border-b border-[#E5E4E0] dark:border-[#333333] transition-colors ${
                     noti.is_read
                       ? "bg-white dark:bg-[#1E1E1E]"
-                      : "bg-blue-50 dark:bg-[#1A233A] hover:bg-blue-100 dark:hover:bg-[#223050]"
+                      : noti.type === 'system' ? "bg-purple-50 dark:bg-[#2A1A3A] hover:bg-purple-100 dark:hover:bg-[#3A2250]" : "bg-blue-50 dark:bg-[#1A233A] hover:bg-blue-100 dark:hover:bg-[#223050]"
                   } hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]`}
                 >
                   <div className="flex items-start gap-2.5">
@@ -170,14 +224,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     <div className={`mt-0.5 w-7 h-7 flex items-center justify-center border-2 shrink-0 ${
                       noti.is_read
                         ? "border-[#D0D0D0] dark:border-[#444444] bg-[#F0F0F0] dark:bg-[#2A2A2A]"
-                        : "border-blue-600 dark:border-blue-400 bg-blue-100 dark:bg-[#1A233A]"
+                        : noti.type === 'system' ? "border-purple-600 dark:border-purple-400 bg-purple-100 dark:bg-[#2A1A3A]" : "border-blue-600 dark:border-blue-400 bg-blue-100 dark:bg-[#1A233A]"
                     }`}>
                       <span className={`material-symbols-outlined text-[14px] ${
                         noti.is_read
                           ? "text-[#A0A0A0] dark:text-[#666666]"
-                          : "text-blue-600 dark:text-blue-400"
+                          : noti.type === 'system' ? "text-purple-600 dark:text-purple-400" : "text-blue-600 dark:text-blue-400"
                       }`}>
-                        {noti.type === "comment" ? "chat_bubble" : "reply"}
+                        {noti.type === "system" ? "campaign" : noti.type === "comment" ? "chat_bubble" : "reply"}
                       </span>
                     </div>
 
@@ -188,31 +242,37 @@ export default function NotificationBell({ userId }: { userId: string }) {
                           ? "text-[#A0A0A0] dark:text-[#666666]"
                           : "text-[#222222] dark:text-[#EAEAEA]"
                       }`}>
-                        <span className={`${
-                          noti.is_read
-                            ? "text-[#A0A0A0] dark:text-[#666666]"
-                            : "text-blue-600 dark:text-blue-400"
-                        }`}>
-                          {noti.triggered_by_nickname}
-                        </span>
-                        님이{" "}
-                        {noti.type === "comment"
-                          ? "회원님의 게시글에 댓글을 남겼습니다."
-                          : "회원님의 댓글에 답글을 남겼습니다."}
+                        {noti.type === "system" ? (
+                          <span>{noti.post_title}</span>
+                        ) : (
+                          <>
+                            <span className={`${
+                              noti.is_read
+                                ? "text-[#A0A0A0] dark:text-[#666666]"
+                                : "text-blue-600 dark:text-blue-400"
+                            }`}>
+                              {noti.triggered_by_nickname}
+                            </span>
+                            님이{" "}
+                            {noti.type === "comment"
+                              ? "회원님의 게시글에 댓글을 남겼습니다."
+                              : "회원님의 댓글에 답글을 남겼습니다."}
+                          </>
+                        )}
                       </p>
                       <p className={`text-[12px] mt-1 truncate ${
                         noti.is_read
                           ? "text-[#C0C0C0] dark:text-[#555555]"
                           : "text-[#666666] dark:text-[#A0A0A0]"
                       }`}>
-                        "{noti.message}"
+                        {noti.type === "system" ? noti.message : `"${noti.message}"`}
                       </p>
                       <p className={`text-[10px] mt-1 font-mono ${
                         noti.is_read
                           ? "text-[#D0D0D0] dark:text-[#444444]"
                           : "text-[#A0A0A0] dark:text-[#666666]"
                       }`}>
-                        {noti.post_title && (
+                        {noti.type !== "system" && noti.post_title && (
                           <span className="mr-2">{noti.post_title.length > 20 ? noti.post_title.substring(0, 20) + "…" : noti.post_title}</span>
                         )}
                         {timeAgo(noti.created_at)}

@@ -14,6 +14,29 @@ export async function middleware(request: NextRequest) {
   const url = new URL(request.nextUrl.pathname, baseUrl);
   const pathname = request.nextUrl.pathname;
 
+  // [글로벌 점검 모드 체크]
+  if (pathname !== '/maintenance' && !pathname.startsWith('/admin')) {
+    const { data: settings } = await supabase.from('site_settings').select('maintenance_mode').eq('id', 1).single();
+    if (settings?.maintenance_mode) {
+      // 관리자인지 확인
+      let isAdmin = false;
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (profile?.role === 'admin') isAdmin = true;
+      }
+      
+      // 관리자가 아니면 점검 페이지로 튕겨냄
+      if (!isAdmin) {
+        url.pathname = '/maintenance';
+        const redirectResponse = NextResponse.redirect(url);
+        supabaseResponse.cookies.getAll().forEach((cookie) => {
+          redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
+      }
+    }
+  }
+
   // 2. 프로필 유무 확인 로직 (로그인했는데 프로필이 없다면 무조건 /welcome으로 강제 이동)
   if (user) {
     const { data: profile } = await supabase.from('profiles').select('id, role').eq('id', user.id).single();

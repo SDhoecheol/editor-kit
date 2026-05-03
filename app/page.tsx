@@ -58,21 +58,72 @@ export default async function Home() {
   const qaPosts = posts.filter(p => p.board_type === "Q&A").slice(0, 5);
   const portfolioPosts = posts.filter(p => p.board_type === "포트폴리오").slice(0, 5);
 
+  // ⭐️ 2. 활성 배너 및 모달 패치
+  const { data: bannersData } = await supabase
+    .from("banners")
+    .select("*")
+    .eq("is_active", true)
+    .order("priority", { ascending: false });
+
+  const activeBanners = bannersData || [];
+  const heroBanners = activeBanners.filter(b => b.type === "banner");
+  const modalBanners = activeBanners.filter(b => b.type === "modal");
+
   return (
     <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8 transition-colors duration-300">
       
+      {/* 긴급 모달 배너 렌더링 (서버 사이드에서 직접 띄움, 실제 프로덕션에선 클라이언트 쿠키/로컬스토리지로 '오늘 하루 보지 않기' 처리 필요) */}
+      {modalBanners.map(modal => (
+        <div key={modal.id} className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-[#1E1E1E] border-4 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] max-w-md w-full relative">
+            <div className="bg-[#222222] text-white px-4 py-2 font-black flex justify-between items-center">
+              <span>Notice</span>
+            </div>
+            <div className="p-6 text-center">
+              {modal.image_url && <img src={modal.image_url} alt="Notice" className="mb-4 max-w-full h-auto border-2 border-[#222222]" />}
+              <h3 className="text-xl font-black text-[#222222] dark:text-[#EAEAEA] mb-2">{modal.title}</h3>
+              {modal.link_url && (
+                <Link href={modal.link_url} className="inline-block mt-4 bg-[#222222] text-white px-6 py-2 font-bold border-2 border-[#222222] hover:bg-transparent hover:text-[#222222] transition-colors">
+                  바로가기
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+
       <div className="lg:col-span-3 space-y-6 md:space-y-8">
         
         {/* 히어로 배너 */}
-        <div className="bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] md:shadow-[8px_8px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] dark:md:shadow-[8px_8px_0px_#111111] p-6 md:p-8 relative overflow-hidden transition-colors">
-          <div className="relative z-10 w-full md:w-2/3">
-            <span className="inline-block bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] font-black text-[10px] uppercase tracking-widest px-2 py-0.5 mb-4">Notice</span>
-            <h2 className="text-2xl md:text-3xl font-black mb-3 leading-tight">에디터킷 V2.0 업데이트<br />3D 패키징 목업 기능 추가!</h2>
-            <p className="text-xs md:text-sm text-[#666666] dark:text-[#A0A0A0] mb-6">번거로운 포토샵 합성 없이, 단 3초 만에 PDF를 입체적인 책자로 변환하세요.</p>
-            <Link href="/tools/mockup3d" className="inline-block w-full md:w-auto text-center bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-6 py-3 md:py-2 font-bold text-sm hover:bg-transparent hover:text-[#222222] dark:hover:bg-[#1E1E1E] dark:hover:text-[#EAEAEA] transition-all shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#444444] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">자세히 보기</Link>
+        {heroBanners.length > 0 ? (
+          heroBanners.map(banner => (
+            <div key={banner.id} className="bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] md:shadow-[8px_8px_0px_#222222] p-6 md:p-8 relative overflow-hidden transition-colors flex items-center justify-between">
+              <div className="relative z-10 w-full md:w-2/3">
+                <span className="inline-block bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] font-black text-[10px] uppercase tracking-widest px-2 py-0.5 mb-4">Notice</span>
+                <h2 className="text-2xl md:text-3xl font-black mb-3 leading-tight whitespace-pre-wrap">{banner.title}</h2>
+                {banner.link_url && (
+                  <Link href={banner.link_url} className="inline-block w-full md:w-auto text-center bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] border-2 border-[#222222] dark:border-[#EAEAEA] px-6 py-3 md:py-2 font-bold text-sm hover:bg-transparent hover:text-[#222222] dark:hover:bg-[#1E1E1E] dark:hover:text-[#EAEAEA] transition-all shadow-[2px_2px_0px_#222222] dark:shadow-[2px_2px_0px_#444444] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]">자세히 보기</Link>
+                )}
+              </div>
+              {banner.image_url ? (
+                <div className="hidden md:block w-1/3 text-right">
+                  <img src={banner.image_url} alt="Banner" className="inline-block max-h-32 object-contain" />
+                </div>
+              ) : (
+                <span className="material-symbols-outlined absolute -right-6 -bottom-6 text-[120px] md:text-[180px] text-[#222222]/5 dark:text-[#EAEAEA]/5 rotate-[-15deg] pointer-events-none">campaign</span>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="bg-white dark:bg-[#1E1E1E] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] md:shadow-[8px_8px_0px_#222222] p-6 md:p-8 relative overflow-hidden transition-colors">
+            <div className="relative z-10 w-full md:w-2/3">
+              <span className="inline-block bg-[#222222] text-[#F5F4F0] font-black text-[10px] uppercase tracking-widest px-2 py-0.5 mb-4">Welcome</span>
+              <h2 className="text-2xl md:text-3xl font-black mb-3 leading-tight">에디터킷 V2.0 업데이트</h2>
+              <p className="text-xs md:text-sm text-[#666666] mb-6">다양한 인쇄/출판 도구를 경험해 보세요.</p>
+            </div>
+            <span className="material-symbols-outlined absolute -right-6 -bottom-6 text-[120px] md:text-[180px] text-[#222222]/5 rotate-[-15deg] pointer-events-none">view_in_ar</span>
           </div>
-          <span className="material-symbols-outlined absolute -right-6 -bottom-6 text-[120px] md:text-[180px] text-[#222222]/5 dark:text-[#EAEAEA]/5 rotate-[-15deg] pointer-events-none">view_in_ar</span>
-        </div>
+        )}
 
         {/* 커뮤니티 2x2 그리드 */}
         <div>

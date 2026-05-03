@@ -13,9 +13,9 @@ export interface UploadedFile {
   quantity: number;
 }
 
-export function useRollNester() {
-  const [maxRollWidth, setMaxRollWidth] = useState<number>(600); // 기본 600mm
-  const [gutter, setGutter] = useState<number>(5); // 기본 5mm 여백
+export function useRollNester(initialMaxWidth: number = 600, initialGutter: number = 5) {
+  const [maxRollWidth, setMaxRollWidth] = useState<number>(initialMaxWidth); 
+  const [gutter, setGutter] = useState<number>(initialGutter); 
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
   const [totalWidth, setTotalWidth] = useState(0);

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 export const metadata = {
@@ -12,16 +13,29 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
   
-  if (!session) {
+  if (!user) {
     redirect("/login");
   }
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   const role = profile?.role || "user";
@@ -51,8 +65,9 @@ export default async function AdminLayout({
           </Link>
 
           {isAdmin && (
-            <Link 
-              href="/admin/users"
+            <>
+              <Link 
+                href="/admin/users"
               className="px-4 py-3 bg-[#F5F4F0] dark:bg-[#2A2A2A] text-[#222222] dark:text-[#EAEAEA] border-2 border-[#222222] dark:border-[#555555] font-bold shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#222222] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center gap-3"
             >
               <span className="material-symbols-outlined">group</span>
@@ -82,6 +97,7 @@ export default async function AdminLayout({
               <span className="material-symbols-outlined">campaign</span>
               공지/알림 관리
             </Link>
+            </>
           )}
         </nav>
 

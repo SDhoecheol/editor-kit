@@ -192,14 +192,14 @@ export default function HarikomiPage() {
                       page.drawPage(embeddedPage, {
                         x: x + slotW, y: y,
                         width: rawW, height: rawH,
-                        rotation: degrees(90)
+                        rotate: degrees(90)
                       });
                     } else {
                       // 앞면: -90도(CW) 회전 (상단이 우측을 향함)
                       page.drawPage(embeddedPage, {
                         x: x, y: y + slotH,
                         width: rawW, height: rawH,
-                        rotation: degrees(-90)
+                        rotate: degrees(-90)
                       });
                     }
                   } else {

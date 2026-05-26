@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, rgb, degrees } from "pdf-lib";
 
 export default function HarikomiPage() {
   const [tab, setTab] = useState<"card" | "saddle">("card");
@@ -168,9 +168,14 @@ export default function HarikomiPage() {
 
         const drawSheet = async (doc: PDFDocument, sheetIdx: number, isBack: boolean) => {
           if (tab === "card") {
+            const rawW = pdfW * MM_TO_PT;
+            const rawH = pdfH * MM_TO_PT;
+            const isVertical = rawH > rawW;
+            const slotW = isVertical ? rawH : rawW;
+            const slotH = isVertical ? rawW : rawH;
+
             const sheetW = 210 * MM_TO_PT; const sheetH = 297 * MM_TO_PT;
-            const itemW = pdfW * MM_TO_PT; const itemH = pdfH * MM_TO_PT;
-            const offsetX = (sheetW - (itemW * 2)) / 2; const offsetY = (sheetH - (itemH * 5)) / 2;
+            const offsetX = (sheetW - (slotW * 2)) / 2; const offsetY = (sheetH - (slotH * 5)) / 2;
             const page = doc.addPage([sheetW, sheetH]);
 
             for (let r = 0; r < 5; r++) {
@@ -178,28 +183,47 @@ export default function HarikomiPage() {
                 const slot = c * 5 + r;
                 const designInfo = getCardDesignForSlot(sheetIdx, slot, isBack);
                 if (designInfo && designInfo.pageNum - 1 < srcPages.length) {
-                  const x = offsetX + (c * itemW); const y = sheetH - offsetY - ((r + 1) * itemH);
+                  const x = offsetX + (c * slotW); const y = sheetH - offsetY - ((r + 1) * slotH);
                   const embeddedPage = await doc.embedPage(srcPages[designInfo.pageNum - 1]);
-                  page.drawPage(embeddedPage, { x, y, width: itemW, height: itemH });
+                  
+                  if (isVertical) {
+                    if (isBack) {
+                      // 뒷면: +90도(CCW) 회전 (상단이 좌측을 향함)
+                      page.drawPage(embeddedPage, {
+                        x: x + slotW, y: y,
+                        width: rawW, height: rawH,
+                        rotation: degrees(90)
+                      });
+                    } else {
+                      // 앞면: -90도(CW) 회전 (상단이 우측을 향함)
+                      page.drawPage(embeddedPage, {
+                        x: x, y: y + slotH,
+                        width: rawW, height: rawH,
+                        rotation: degrees(-90)
+                      });
+                    }
+                  } else {
+                    page.drawPage(embeddedPage, { x, y, width: rawW, height: rawH });
+                  }
                 }
               }
             }
 
             if (cropMarks) {
               const b_pt = 1 * MM_TO_PT; const l = 5 * MM_TO_PT; const str = 0.5;
-              const gridLeft = offsetX; const gridRight = offsetX + (2 * itemW);
-              const gridBottom = sheetH - offsetY - (5 * itemH); const gridTop = sheetH - offsetY;
+              const gridLeft = offsetX; const gridRight = offsetX + (2 * slotW);
+              const gridBottom = sheetH - offsetY - (5 * slotH); const gridTop = sheetH - offsetY;
 
               const xCuts = [];
               for(let c=0; c<2; c++) {
-                xCuts.push(gridLeft + c*itemW + b_pt);
-                xCuts.push(gridLeft + c*itemW + itemW - b_pt);
+                xCuts.push(gridLeft + c*slotW + b_pt);
+                xCuts.push(gridLeft + c*slotW + slotW - b_pt);
               }
               const yCuts = [];
               for(let r=0; r<5; r++) {
-                const y_pt = sheetH - offsetY - ((r + 1) * itemH);
+                const y_pt = sheetH - offsetY - ((r + 1) * slotH);
                 yCuts.push(y_pt + b_pt);
-                yCuts.push(y_pt + itemH - b_pt);
+                yCuts.push(y_pt + slotH - b_pt);
               }
 
               const drawL = (sx: number, sy: number, ex: number, ey: number) => page.drawLine({ start: { x: sx, y: sy }, end: { x: ex, y: ey }, thickness: str, color: markColor });

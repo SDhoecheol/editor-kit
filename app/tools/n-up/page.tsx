@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { PDFDocument, rgb, degrees } from "pdf-lib";
+import { PDFDocument, rgb, degrees, PDFPage } from "pdf-lib";
 
 export default function NUpPage() {
   const [fileName, setFileName] = useState<string | null>(null);
@@ -15,12 +15,9 @@ export default function NUpPage() {
   const [sides, setSides] = useState<1 | 2>(2);
   const [cropMarks, setCropMarks] = useState<boolean>(true);
 
-  const [previewSide, setPreviewSide] = useState<"front" | "back">("front");
+  const [previewPageIndex, setPreviewPageIndex] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [fullPdfBytes, setFullPdfBytes] = useState<any>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // N-up calculation logic
   const { cols, rows, itemW, itemH, rotated90 } = useMemo(() => {
@@ -60,7 +57,7 @@ export default function NUpPage() {
         setPdfW(Math.round(width / 2.83465));
         setPdfH(Math.round(height / 2.83465));
         setFilePages(pageCount);
-        setPreviewSide("front");
+        setPreviewPageIndex(0);
       } catch (err) {
         alert("PDF 로드 오류가 발생했습니다.");
         removeFile();
@@ -71,164 +68,138 @@ export default function NUpPage() {
 
   const removeFile = () => {
     setFileName(null); setFileBuffer(null); setFilePages(0); setPdfW(0); setPdfH(0);
-    Object.values(previewUrls).forEach(url => URL.revokeObjectURL(url));
-    setPreviewUrls({}); setFullPdfBytes(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
+  };
+
+  const drawSheet = async (doc: PDFDocument, srcPage: PDFPage, sourceIndex: number) => {
+    const MM_TO_PT = 2.83465;
+    const markColor = rgb(0.1, 0.1, 0.1);
+    const isBack = sides === 2 && (sourceIndex % 2 !== 0);
+
+    const sheetW = paperW * MM_TO_PT; 
+    const sheetH = paperH * MM_TO_PT;
+    const slotW_pt = itemW * MM_TO_PT; 
+    const slotH_pt = itemH * MM_TO_PT;
+    
+    const offsetX = (sheetW - (cols * slotW_pt)) / 2; 
+    const offsetY = (sheetH - (rows * slotH_pt)) / 2;
+    const page = doc.addPage([sheetW, sheetH]);
+
+    const rawW_pt = pdfW * MM_TO_PT;
+    const rawH_pt = pdfH * MM_TO_PT;
+    const embeddedPage = await doc.embedPage(srcPage);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const mappedC = isBack ? cols - 1 - c : c;
+        const isRotated180 = ((mappedC + r) % 2 === 1);
+        
+        const x = offsetX + (c * slotW_pt); 
+        const y = sheetH - offsetY - ((r + 1) * slotH_pt);
+        
+        let drawX = x;
+        let drawY = y;
+        let drawRot = 0;
+        
+        if (rotated90) {
+          if (isRotated180) {
+            drawX = x; drawY = y + slotH_pt; drawRot = -90;
+          } else {
+            drawX = x + slotW_pt; drawY = y; drawRot = 90;
+          }
+        } else {
+          if (isRotated180) {
+            drawX = x + slotW_pt; drawY = y + slotH_pt; drawRot = 180;
+          } else {
+            drawX = x; drawY = y; drawRot = 0;
+          }
+        }
+
+        page.drawPage(embeddedPage, {
+          x: drawX, y: drawY, width: rawW_pt, height: rawH_pt, rotate: degrees(drawRot)
+        });
+      }
+    }
+
+    if (cropMarks) {
+      const l = 5 * MM_TO_PT; 
+      const str = 0.5;
+      const gridLeft = offsetX; const gridRight = offsetX + (cols * slotW_pt);
+      const gridBottom = sheetH - offsetY - (rows * slotH_pt); const gridTop = sheetH - offsetY;
+
+      const drawL = (sx: number, sy: number, ex: number, ey: number) => page.drawLine({ start: { x: sx, y: sy }, end: { x: ex, y: ey }, thickness: str, color: markColor });
+
+      for(let c = 0; c <= cols; c++) {
+        const cx = gridLeft + (c * slotW_pt);
+        drawL(cx, gridTop, cx, gridTop + l);
+        drawL(cx, gridBottom, cx, gridBottom - l);
+      }
+      for(let r = 0; r <= rows; r++) {
+        const cy = sheetH - offsetY - (r * slotH_pt);
+        drawL(gridLeft, cy, gridLeft - l, cy);
+        drawL(gridRight, cy, gridRight + l, cy);
+      }
+    }
   };
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     if (!fileBuffer || filePages === 0 || totalN === 0) {
-      Object.values(previewUrls).forEach(url => URL.revokeObjectURL(url));
-      setPreviewUrls({}); setFullPdfBytes(null);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
       return;
     }
     
-    setIsGenerating(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     
     timerRef.current = setTimeout(async () => {
       try {
         const srcDoc = await PDFDocument.load(fileBuffer);
         const srcPages = srcDoc.getPages();
-        const MM_TO_PT = 2.83465;
-        const markColor = rgb(0.1, 0.1, 0.1);
-
-        const drawSheet = async (doc: PDFDocument, isBack: boolean) => {
-          const sheetW = paperW * MM_TO_PT; 
-          const sheetH = paperH * MM_TO_PT;
-          const slotW_pt = itemW * MM_TO_PT; 
-          const slotH_pt = itemH * MM_TO_PT;
-          
-          const offsetX = (sheetW - (cols * slotW_pt)) / 2; 
-          const offsetY = (sheetH - (rows * slotH_pt)) / 2;
-          const page = doc.addPage([sheetW, sheetH]);
-
-          const rawW_pt = pdfW * MM_TO_PT;
-          const rawH_pt = pdfH * MM_TO_PT;
-
-          for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-              // ⭐️ 머리 맞대기(Head-to-Head) 로직
-              // 인접한 슬롯은 180도 회전시켜서 위아래/좌우가 맞닿게 처리
-              // 양면(isBack)일 경우, 좌우 뒤집기(Turn)를 위해 c 위치를 역상으로 매핑
-              const mappedC = isBack ? cols - 1 - c : c;
-              
-              const isRotated180 = ((mappedC + r) % 2 === 1);
-              
-              const x = offsetX + (c * slotW_pt); 
-              const y = sheetH - offsetY - ((r + 1) * slotH_pt);
-              
-              // 페이지 결정 (간단히 첫 페이지만 사용, 양면이면 뒷면은 두 번째 페이지 사용)
-              const pageNum = (isBack && srcPages.length >= 2) ? 1 : 0;
-              const embeddedPage = await doc.embedPage(srcPages[pageNum]);
-              
-              let drawX = x;
-              let drawY = y;
-              let drawRot = 0;
-              
-              if (rotated90) {
-                // PDF가 가로로 누워야 하는 경우 (90도 회전 베이스)
-                if (isRotated180) {
-                  // 원래 90도 + 180도 = 270도(-90도)
-                  drawX = x;
-                  drawY = y + slotH_pt;
-                  drawRot = -90;
-                } else {
-                  // 90도 회전
-                  drawX = x + slotW_pt;
-                  drawY = y;
-                  drawRot = 90;
-                }
-              } else {
-                // 기본 세로형
-                if (isRotated180) {
-                  drawX = x + slotW_pt;
-                  drawY = y + slotH_pt;
-                  drawRot = 180;
-                } else {
-                  drawX = x;
-                  drawY = y;
-                  drawRot = 0;
-                }
-              }
-
-              page.drawPage(embeddedPage, {
-                x: drawX,
-                y: drawY,
-                width: rawW_pt,
-                height: rawH_pt,
-                rotate: degrees(drawRot)
-              });
-            }
-          }
-
-          // ⭐️ 재단선(돔보선) 그리기 (맞닿은 부분은 일자(-) 형태로)
-          if (cropMarks) {
-            const l = 5 * MM_TO_PT; 
-            const str = 0.5;
-            const gridLeft = offsetX; const gridRight = offsetX + (cols * slotW_pt);
-            const gridBottom = sheetH - offsetY - (rows * slotH_pt); const gridTop = sheetH - offsetY;
-
-            const drawL = (sx: number, sy: number, ex: number, ey: number) => page.drawLine({ start: { x: sx, y: sy }, end: { x: ex, y: ey }, thickness: str, color: markColor });
-
-            // 수직선 (상단/하단 틱)
-            for(let c = 0; c <= cols; c++) {
-              const cx = gridLeft + (c * slotW_pt);
-              drawL(cx, gridTop, cx, gridTop + l);
-              drawL(cx, gridBottom, cx, gridBottom - l);
-            }
-            // 수평선 (좌측/우측 틱)
-            for(let r = 0; r <= rows; r++) {
-              const cy = sheetH - offsetY - (r * slotH_pt);
-              drawL(gridLeft, cy, gridLeft - l, cy);
-              drawL(gridRight, cy, gridRight + l, cy);
-            }
-          }
-        };
-
-        const newPreviewUrls: Record<string, string> = {};
+        const preDoc = await PDFDocument.create();
         
-        const preFrontDoc = await PDFDocument.create();
-        await drawSheet(preFrontDoc, false);
-        const fBytes = await preFrontDoc.save();
-        newPreviewUrls[`front`] = URL.createObjectURL(new Blob([fBytes as any], { type: 'application/pdf' }));
-
-        if (sides === 2) {
-          const preBackDoc = await PDFDocument.create();
-          await drawSheet(preBackDoc, true);
-          const bBytes = await preBackDoc.save();
-          newPreviewUrls[`back`] = URL.createObjectURL(new Blob([bBytes as any], { type: 'application/pdf' }));
-        }
+        await drawSheet(preDoc, srcPages[previewPageIndex], previewPageIndex);
         
-        setPreviewUrls(prev => {
-          Object.values(prev).forEach(u => URL.revokeObjectURL(u));
-          return newPreviewUrls;
+        const pBytes = await preDoc.save();
+        const newUrl = URL.createObjectURL(new Blob([pBytes as any], { type: 'application/pdf' }));
+        setPreviewUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return newUrl;
         });
-
-        const fullDoc = await PDFDocument.create();
-        await drawSheet(fullDoc, false);
-        if (sides === 2) await drawSheet(fullDoc, true);
-        setFullPdfBytes(await fullDoc.save());
-
       } catch (e) {
         console.error(e);
-      } finally {
-        setIsGenerating(false);
       }
     }, 400); 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileBuffer, paperW, paperH, sides, cropMarks, totalN]);
+  }, [fileBuffer, paperW, paperH, sides, cropMarks, totalN, previewPageIndex]);
 
-  const handleDownload = () => {
-    if (!fullPdfBytes || !fileName) return;
-    const blob = new Blob([fullPdfBytes as any], { type: 'application/pdf' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${fileName.replace(/\.[^/.]+$/, "")}_두판걸이_${paperW}x${paperH}.pdf`;
-    link.click();
+  const handleDownload = async () => {
+    if (!fileBuffer || !fileName || totalN === 0) return;
+    setIsGenerating(true);
+    try {
+      const srcDoc = await PDFDocument.load(fileBuffer);
+      const srcPages = srcDoc.getPages();
+      const fullDoc = await PDFDocument.create();
+      
+      for (let i = 0; i < srcPages.length; i++) {
+        await drawSheet(fullDoc, srcPages[i], i);
+      }
+      
+      const fullPdfBytes = await fullDoc.save();
+      const blob = new Blob([fullPdfBytes as any], { type: 'application/pdf' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${fileName.replace(/\.[^/.]+$/, "")}_두판걸이_${paperW}x${paperH}.pdf`;
+      link.click();
+    } catch (e) {
+      alert("다운로드 중 오류가 발생했습니다.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -299,7 +270,7 @@ export default function NUpPage() {
               )}
 
               <div className="grid grid-cols-2 gap-0 border-2 border-[#222222] dark:border-[#444444]">
-                <button onClick={() => { setSides(1); setPreviewSide("front"); }} className={`py-3 flex flex-col items-center justify-center transition-all border-r-2 border-[#222222] dark:border-[#444444] ${sides === 1 ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
+                <button onClick={() => setSides(1)} className={`py-3 flex flex-col items-center justify-center transition-all border-r-2 border-[#222222] dark:border-[#444444] ${sides === 1 ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
                   <span className="font-bold text-sm">단면</span>
                 </button>
                 <button onClick={() => setSides(2)} className={`py-3 flex flex-col items-center justify-center transition-all ${sides === 2 ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
@@ -323,10 +294,14 @@ export default function NUpPage() {
 
           <button 
             onClick={handleDownload} 
-            disabled={!fullPdfBytes || isGenerating || totalN === 0} 
+            disabled={!fileBuffer || isGenerating || totalN === 0} 
             className="w-full bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212] disabled:opacity-50 disabled:cursor-not-allowed border-2 border-[#222222] dark:border-[#EAEAEA] py-4 font-black shadow-[4px_4px_0px_#E5E4E0] dark:shadow-[4px_4px_0px_#111111] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_#E5E4E0] dark:hover:shadow-[2px_2px_0px_#111111] transition-all flex items-center justify-center gap-2 text-lg"
           >
-            <span className="material-symbols-outlined text-[24px]">download</span> PDF 파일 저장
+            {isGenerating ? (
+              <><span className="material-symbols-outlined text-[24px] animate-spin">refresh</span> 생성 중...</>
+            ) : (
+              <><span className="material-symbols-outlined text-[24px]">download</span> PDF 파일 저장</>
+            )}
           </button>
         </div>
 
@@ -334,26 +309,39 @@ export default function NUpPage() {
           <div className="bg-[#222222] dark:bg-[#111111] px-6 py-4 flex items-center justify-between border-b-2 border-[#222222] dark:border-[#444444] shrink-0">
             <div className="flex items-center gap-4">
               <span className="text-[#F5F4F0] font-black tracking-widest text-xs">PREVIEW</span>
-              {sides === 2 && (
-                <div className="flex border-2 border-[#F5F4F0] dark:border-[#444444]">
-                  <button onClick={() => setPreviewSide("front")} className={`px-4 py-1.5 text-xs font-bold transition-all border-r-2 border-[#F5F4F0] dark:border-[#444444] ${previewSide === 'front' ? 'bg-[#F5F4F0] text-[#222222] dark:bg-[#444444] dark:text-[#EAEAEA]' : 'text-[#A0A0A0] hover:bg-[#333333]'}`}>앞면</button>
-                  <button onClick={() => setPreviewSide("back")} className={`px-4 py-1.5 text-xs font-bold transition-all ${previewSide === 'back' ? 'bg-[#F5F4F0] text-[#222222] dark:bg-[#444444] dark:text-[#EAEAEA]' : 'text-[#A0A0A0] hover:bg-[#333333]'}`}>뒷면</button>
+              {filePages > 0 && (
+                <div className="flex items-center gap-3 text-[#F5F4F0] bg-[#333333] px-3 py-1 border border-[#444444]">
+                  <button 
+                    onClick={() => setPreviewPageIndex(p => Math.max(0, p - 1))} 
+                    disabled={previewPageIndex === 0}
+                    className="hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-xl font-bold leading-none"
+                  >
+                    &lt;
+                  </button>
+                  <span className="text-xs font-bold tracking-widest min-w-[60px] text-center">
+                    {previewPageIndex + 1} / {filePages}
+                  </span>
+                  <button 
+                    onClick={() => setPreviewPageIndex(p => Math.min(filePages - 1, p + 1))} 
+                    disabled={previewPageIndex === filePages - 1}
+                    className="hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-xl font-bold leading-none"
+                  >
+                    &gt;
+                  </button>
+                  {sides === 2 && (
+                    <span className="ml-2 text-[10px] bg-[#555] px-2 py-0.5 rounded-sm">
+                      {previewPageIndex % 2 !== 0 ? '뒷면(Back)' : '앞면(Front)'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
           <div className="flex-1 bg-[#2A2A2A] relative flex items-center justify-center overflow-hidden">
-            {isGenerating && (
-              <div className="absolute inset-0 bg-[#222222]/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
-                <span className="material-symbols-outlined text-white text-5xl animate-spin mb-4">settings</span>
-                <p className="text-white font-black tracking-widest text-lg drop-shadow-md">렌더링 중...</p>
-              </div>
-            )}
-            
-            {previewUrls[previewSide] ? (
+            {previewUrl ? (
               <div className="w-full h-full p-4 bg-[#121212]">
-                <iframe src={`${previewUrls[previewSide]}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-2 border-[#444444] bg-white" title="Imposed Preview" />
+                <iframe src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-2 border-[#444444] bg-white" title="Imposed Preview" />
               </div>
             ) : (
               <div className="text-[#A0A0A0] dark:text-[#666666] text-center">

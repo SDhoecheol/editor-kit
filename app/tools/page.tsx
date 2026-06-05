@@ -77,18 +77,25 @@ export default function ToolsPage() {
           id: "PRN-02",
         },
         {
+          title: "두판걸이 조판 (N-up)",
+          desc: "소량 인쇄를 위해 다수의 원고를 한 용지에 자동 배열하고 상하반전 처리합니다.",
+          href: "/tools/n-up",
+          icon: "grid_on",
+          id: "PRN-03",
+        },
+        {
           title: "세네카 계산기",
           desc: "지류 평량과 페이지 수를 기반으로 정확한 책등 두께를 산출합니다.",
           href: "/tools/seneca",
           icon: "menu_book",
-          id: "PRN-03",
+          id: "PRN-04",
         },
         {
           title: "수율 계산기",
           desc: "규격별 전지 수율과 안착 효율을 계산하여 비용을 절감합니다.",
           href: "/tools/yieldcalc",
           icon: "calculate",
-          id: "PRN-04",
+          id: "PRN-05",
         },
       ]
     },

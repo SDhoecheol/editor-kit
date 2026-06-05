@@ -13,6 +13,7 @@ export default function NUpPage() {
   const [paperW, setPaperW] = useState<number>(310);
   const [paperH, setPaperH] = useState<number>(225);
   const [sides, setSides] = useState<1 | 2>(2);
+  const [isHeadToHead, setIsHeadToHead] = useState<boolean>(true);
   const [cropMarks, setCropMarks] = useState<boolean>(true);
 
   const [previewPageIndex, setPreviewPageIndex] = useState<number>(0);
@@ -95,7 +96,7 @@ export default function NUpPage() {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const mappedC = isBack ? cols - 1 - c : c;
-        const isRotated180 = ((mappedC + r) % 2 === 1);
+        const isRotated180 = isHeadToHead ? ((mappedC + r) % 2 === 1) : false;
         
         const x = offsetX + (c * slotW_pt); 
         const y = sheetH - offsetY - ((r + 1) * slotH_pt);
@@ -175,7 +176,7 @@ export default function NUpPage() {
       }
     }, 400); 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileBuffer, paperW, paperH, sides, cropMarks, totalN, previewPageIndex]);
+  }, [fileBuffer, paperW, paperH, sides, isHeadToHead, cropMarks, totalN, previewPageIndex]);
 
   const handleDownload = async () => {
     if (!fileBuffer || !fileName || totalN === 0) return;
@@ -269,13 +270,24 @@ export default function NUpPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-0 border-2 border-[#222222] dark:border-[#444444]">
-                <button onClick={() => setSides(1)} className={`py-3 flex flex-col items-center justify-center transition-all border-r-2 border-[#222222] dark:border-[#444444] ${sides === 1 ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
-                  <span className="font-bold text-sm">단면</span>
-                </button>
-                <button onClick={() => setSides(2)} className={`py-3 flex flex-col items-center justify-center transition-all ${sides === 2 ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
-                  <span className="font-bold text-sm">양면</span>
-                </button>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-0 border-2 border-[#222222] dark:border-[#444444]">
+                  <button onClick={() => setSides(1)} className={`py-3 flex flex-col items-center justify-center transition-all border-r-2 border-[#222222] dark:border-[#444444] ${sides === 1 ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
+                    <span className="font-bold text-sm">단면</span>
+                  </button>
+                  <button onClick={() => setSides(2)} className={`py-3 flex flex-col items-center justify-center transition-all ${sides === 2 ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
+                    <span className="font-bold text-sm">양면</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-0 border-2 border-[#222222] dark:border-[#444444]">
+                  <button onClick={() => setIsHeadToHead(false)} className={`py-3 flex flex-col items-center justify-center transition-all border-r-2 border-[#222222] dark:border-[#444444] ${!isHeadToHead ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
+                    <span className="font-bold text-sm">정방향 배치</span>
+                  </button>
+                  <button onClick={() => setIsHeadToHead(true)} className={`py-3 flex flex-col items-center justify-center transition-all ${isHeadToHead ? 'bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]' : 'bg-white dark:bg-[#1E1E1E] text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]'}`}>
+                    <span className="font-bold text-sm">역방향 (머리맞대기)</span>
+                  </button>
+                </div>
               </div>
               
               <div className="flex items-center justify-between border-2 border-[#E5E4E0] dark:border-[#333333] p-4 bg-[#F5F4F0] dark:bg-[#121212]">

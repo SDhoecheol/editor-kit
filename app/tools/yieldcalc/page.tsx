@@ -6,8 +6,12 @@ import { PDFDocument, rgb, degrees } from "pdf-lib";
 const paperSizes: Record<string, { name: string; w: number; h: number }> = {
   guk: { name: '국전지', w: 939, h: 636 },
   '4x6': { name: '4x6전지', w: 1091, h: 788 },
-  guk_half: { name: '국반전지', w: 636, h: 469 },
-  '4x6_half': { name: '4x6반전지', w: 788, h: 545 }
+  guk_half: { name: '국반전지 (국2절)', w: 636, h: 469 },
+  '4x6_half': { name: '4x6반전지 (2절)', w: 788, h: 545 },
+  guk_4: { name: '국4절지', w: 469, h: 318 },
+  '4x6_4': { name: '4x6 4절지', w: 545, h: 394 },
+  guk_8: { name: '국8절지', w: 318, h: 234 },
+  '4x6_8': { name: '4x6 8절지', w: 394, h: 272 }
 };
 
 // 16P 무선/양장 접지 배열
@@ -388,8 +392,14 @@ export default function YieldCalcPage() {
                   <label className="block text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mb-1">사용 전지 선택</label>
                   <select value={paperPref} onChange={(e) => setPaperPref(e.target.value)} className="w-full px-4 py-2 border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#121212] text-[#222222] dark:text-[#EAEAEA] text-sm font-bold outline-none cursor-pointer">
                     <option value="auto">자동 추천 (가장 효율적)</option>
-                    <option value="guk">국전지 (939x636)</option>
                     <option value="4x6">4x6전지 (1091x788)</option>
+                    <option value="4x6_half">4x6반전지/2절 (788x545)</option>
+                    <option value="4x6_4">4x6 4절지 (545x394)</option>
+                    <option value="4x6_8">4x6 8절지 (394x272)</option>
+                    <option value="guk">국전지 (939x636)</option>
+                    <option value="guk_half">국반전지/국2절 (636x469)</option>
+                    <option value="guk_4">국4절지 (469x318)</option>
+                    <option value="guk_8">국8절지 (318x234)</option>
                   </select>
                 </div>
               </div>
@@ -465,7 +475,7 @@ export default function YieldCalcPage() {
               </div>
             </div>
             
-            <div className="flex-1 bg-[#2A2A2A] relative">
+            <div className="flex-1 bg-[#2A2A2A] relative flex items-center justify-center">
               {isGenerating && (
                 <div className="absolute inset-0 bg-[#222222]/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
                   <span className="material-symbols-outlined text-white text-5xl animate-spin mb-4">settings</span>
@@ -473,14 +483,72 @@ export default function YieldCalcPage() {
                 </div>
               )}
               
-              {previewUrls[`${currentSheetIdx}-${previewSide}`] ? (
+              {fileBuffer && previewUrls[`${currentSheetIdx}-${previewSide}`] ? (
                 <div className="w-full h-full p-4 bg-[#121212]">
                   <iframe src={`${previewUrls[`${currentSheetIdx}-${previewSide}`]}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`} className="w-full h-full border-2 border-[#444444] bg-white" title="Imposed Preview" />
                 </div>
+              ) : result && width && height ? (
+                <div className="w-full h-full p-4 md:p-8 flex items-center justify-center bg-[#121212] overflow-hidden relative">
+                  <div className="absolute top-4 left-4 bg-[#333333] text-[#F5F4F0] px-3 py-1 text-xs font-black tracking-widest flex items-center gap-2 border border-[#444444]">
+                    <span className="material-symbols-outlined text-[16px] text-blue-400">design_services</span>
+                    재단 시뮬레이터
+                  </div>
+                  <div className="relative w-full h-full flex items-center justify-center">
+                    <svg viewBox={`0 0 ${result.w} ${result.h}`} className="max-w-full max-h-full drop-shadow-[0_10px_15px_rgba(0,0,0,0.5)] border-4 border-[#333333]" style={{ backgroundColor: '#F5F4F0' }}>
+                      {/* 종이 외곽 사이즈 표시 */}
+                      <text x={result.w / 2} y={30} fontSize={Math.max(20, result.w * 0.03)} fill="#A0A0A0" textAnchor="middle" fontWeight="black" opacity="0.5">
+                        {result.w}mm
+                      </text>
+                      <text x={30} y={result.h / 2} fontSize={Math.max(20, result.w * 0.03)} fill="#A0A0A0" textAnchor="middle" fontWeight="black" opacity="0.5" transform={`rotate(270, 30, ${result.h / 2})`}>
+                        {result.h}mm
+                      </text>
+
+                      {/* 배치된 조각 그리기 */}
+                      {Array.from({ length: result.rows }).map((_, r) => (
+                        Array.from({ length: result.cols }).map((_, c) => {
+                          const itemW = result.rotated ? result.jobH : result.jobW;
+                          const itemH = result.rotated ? result.jobW : result.jobH;
+                          
+                          const offsetX = (result.w - (result.cols * itemW)) / 2;
+                          const offsetY = (result.h - (result.rows * itemH)) / 2;
+                          
+                          const x = offsetX + (c * itemW);
+                          const y = offsetY + (r * itemH);
+                          
+                          return (
+                            <g key={`${r}-${c}`}>
+                              <rect x={x} y={y} width={itemW} height={itemH} fill="#3b82f6" fillOpacity="0.2" stroke="#1d4ed8" strokeWidth={result.w > 800 ? "4" : "2"} />
+                              <rect x={x + bleed} y={y + bleed} width={itemW - bleed*2} height={itemH - bleed*2} fill="white" stroke="#3b82f6" strokeWidth={result.w > 800 ? "2" : "1"} />
+                              <text x={x + itemW/2} y={y + itemH/2} fontSize={Math.max(14, result.w * 0.02)} fill="#1e3a8a" textAnchor="middle" dominantBaseline="middle" fontWeight="black">
+                                {result.rotated ? `${result.jobH}x${result.jobW}` : `${result.jobW}x${result.jobH}`}
+                              </text>
+                            </g>
+                          )
+                        })
+                      ))}
+                      
+                      {/* 여백 치수 표시 (가로 여백이 10mm 이상일 때만 표시) */}
+                      {(result.w - (result.cols * (result.rotated ? result.jobH : result.jobW))) > 10 && (
+                        <text x={result.w - ((result.w - (result.cols * (result.rotated ? result.jobH : result.jobW))) / 4)} y={result.h / 2} fontSize={Math.max(16, result.w * 0.025)} fill="#ef4444" textAnchor="middle" dominantBaseline="middle" fontWeight="black" transform={`rotate(90, ${result.w - ((result.w - (result.cols * (result.rotated ? result.jobH : result.jobW))) / 4)}, ${result.h / 2})`}>
+                          남는 여백: {Math.floor((result.w - (result.cols * (result.rotated ? result.jobH : result.jobW))))}mm
+                        </text>
+                      )}
+                      {/* 여백 치수 표시 (세로 여백이 10mm 이상일 때만 표시) */}
+                      {(result.h - (result.rows * (result.rotated ? result.jobW : result.jobH))) > 10 && (
+                        <text x={result.w / 2} y={result.h - ((result.h - (result.rows * (result.rotated ? result.jobW : result.jobH))) / 4)} fontSize={Math.max(16, result.w * 0.025)} fill="#ef4444" textAnchor="middle" dominantBaseline="middle" fontWeight="black">
+                          남는 여백: {Math.floor((result.h - (result.rows * (result.rotated ? result.jobW : result.jobH))))}mm
+                        </text>
+                      )}
+                    </svg>
+                  </div>
+                </div>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-[#A0A0A0] dark:text-[#666666]">
-                  <span className="material-symbols-outlined text-6xl mb-3 opacity-50">picture_as_pdf</span>
-                  <p className="text-sm font-bold tracking-widest">PDF를 업로드하면 조판된 결과가 나타납니다.</p>
+                  <span className="material-symbols-outlined text-6xl mb-3 opacity-50">design_services</span>
+                  <p className="text-sm font-bold tracking-widest text-center mt-2">
+                    PDF 원고를 첨부하지 않아도<br/>
+                    가로/세로 규격을 입력하면 종이 재단 시뮬레이션 도면이 생성됩니다.
+                  </p>
                 </div>
               )}
             </div>

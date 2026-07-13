@@ -97,6 +97,13 @@ export default function ToolsPage() {
           icon: "calculate",
           id: "PRN-05",
         },
+        {
+          title: "재단 시뮬레이터",
+          desc: "PDF 원고 없이 종이 규격 내 최적의 재단 배치를 시각적으로 확인합니다.",
+          href: "/tools/cut-simulator",
+          icon: "design_services",
+          id: "PRN-06",
+        },
       ]
     },
     {

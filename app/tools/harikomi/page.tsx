@@ -132,7 +132,7 @@ export default function HarikomiPage() {
 
     if (layout === "standard") designOffset = 0;
     else if (layout === "2up") designOffset = mappedSlot < 5 ? 0 : 1;
-    else if (layout === "5up") designOffset = Math.floor(mappedSlot / 2);
+    else if (layout === "5up") designOffset = mappedSlot % 5;
     else if (layout === "10up") designOffset = mappedSlot;
 
     const designIdx = startIdx + designOffset;

@@ -96,7 +96,7 @@ export default function NUpPage() {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const mappedC = isBack ? cols - 1 - c : c;
-        const isRotated180 = isHeadToHead ? ((mappedC + r) % 2 === 1) : false;
+        const isRotated180 = isHeadToHead ? ((mappedC + r) % 2 === 0) : false;
         
         const x = offsetX + (c * slotW_pt); 
         const y = sheetH - offsetY - ((r + 1) * slotH_pt);

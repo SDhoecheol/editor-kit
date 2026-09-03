@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -14,6 +14,14 @@ interface NumberPosition {
   xMm: number;
   yMm: number;
 }
+
+interface HistorySnapshot {
+  positions: NumberPosition[];
+  activePosId: string;
+  fontSize: number;
+}
+
+type ResizeHandle = "nw" | "ne" | "se" | "sw";
 
 export default function PdfNumberingPage() {
   const [fileName, setFileName] = useState<string | null>(null);
@@ -29,34 +37,45 @@ export default function PdfNumberingPage() {
   const [startNum, setStartNum] = useState<number>(1);
   const [endNum, setEndNum] = useState<number>(100);
   const [step, setStep] = useState<number>(1);
-  const [digits, setDigits] = useState<number>(4); // 0이면 패딩 없음
+  const [digits, setDigits] = useState<number>(4);
   const [prefix, setPrefix] = useState<string>("No. ");
   const [suffix, setSuffix] = useState<string>("");
 
   // 폰트 & 스타일 설정
-  const [fontSize, setFontSize] = useState<number>(16);
+  const [fontSize, setFontSize] = useState<number>(18);
   const [fontFamily, setFontFamily] = useState<"Helvetica" | "Courier" | "Times">("Courier");
-  const [fontColor, setFontColor] = useState<string>("#dc2626"); // 티켓 인쇄용 기본 적색
-  
+  const [fontColor, setFontColor] = useState<string>("#dc2626");
+
   // 넘버링 위치 목록 (다중 넘버링 지원)
   const [positions, setPositions] = useState<NumberPosition[]>([
     { id: "pos-1", name: "번호 1", xMm: 15, yMm: 15 },
   ]);
   const [activePosId, setActivePosId] = useState<string>("pos-1");
 
-  // 드래그 상태 관리
+  // 히스토리 (Ctrl+Z 실행 취소 / Ctrl+Y 다시 실행)
+  const [history, setHistory] = useState<HistorySnapshot[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+  // 에디터 마우스 인터랙션 상태
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const [draggingPosId, setDraggingPosId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [interactionMode, setInteractionMode] = useState<"idle" | "move" | "resize">("idle");
+  const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null);
+  const [isShiftPressed, setIsShiftPressed] = useState<boolean>(false);
+
+  // 드래그 시작 정보
+  const dragStartInfo = useRef<{
+    startX: number;
+    startY: number;
+    initialPos: NumberPosition;
+    initialFontSize: number;
+  } | null>(null);
 
   // 생성 진행 상태
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // 총 생성 수량 계산
   const totalQuantity = Math.max(0, Math.floor((endNum - startNum) / (step || 1)) + 1);
 
-  // 샘플 번호 포맷팅
   const formatNumber = (num: number) => {
     let numStr = String(num);
     if (digits > 0) {
@@ -73,7 +92,74 @@ export default function PdfNumberingPage() {
     return { r, g, b };
   };
 
-  // PDF 업로드 및 첫 페이지 렌더링
+  // --- 히스토리 스택 관리 (Undo / Redo) ---
+  const saveSnapshot = useCallback(
+    (customPositions?: NumberPosition[], customFontSize?: number, customActiveId?: string) => {
+      const snap: HistorySnapshot = {
+        positions: customPositions || positions,
+        fontSize: customFontSize !== undefined ? customFontSize : fontSize,
+        activePosId: customActiveId || activePosId,
+      };
+
+      setHistory((prev) => {
+        const next = prev.slice(0, historyIndex + 1);
+        next.push(snap);
+        if (next.length > 30) next.shift(); // 최대 30단계
+        return next;
+      });
+      setHistoryIndex((prev) => Math.min(prev + 1, 29));
+    },
+    [positions, fontSize, activePosId, historyIndex]
+  );
+
+  const undo = useCallback(() => {
+    if (historyIndex <= 0) return;
+    const target = history[historyIndex - 1];
+    setPositions(target.positions);
+    setFontSize(target.fontSize);
+    setActivePosId(target.activePosId);
+    setHistoryIndex((prev) => prev - 1);
+  }, [history, historyIndex]);
+
+  const redo = useCallback(() => {
+    if (historyIndex >= history.length - 1) return;
+    const target = history[historyIndex + 1];
+    setPositions(target.positions);
+    setFontSize(target.fontSize);
+    setActivePosId(target.activePosId);
+    setHistoryIndex((prev) => prev + 1);
+  }, [history, historyIndex]);
+
+  // 키보드 이벤트 (Ctrl+Z, Ctrl+Y, Shift)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftPressed(true);
+
+      const isCtrl = e.ctrlKey || e.metaKey;
+      if (isCtrl) {
+        if (e.key.toLowerCase() === "z" && !e.shiftKey) {
+          e.preventDefault();
+          undo();
+        } else if (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z")) {
+          e.preventDefault();
+          redo();
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftPressed(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [undo, redo]);
+
+  // PDF 업로드 및 렌더링
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | FileList) => {
     let file: File | null = null;
     if (e instanceof FileList) file = e[0];
@@ -96,7 +182,7 @@ export default function PdfNumberingPage() {
         setPageCount(pdf.numPages);
 
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 }); // 선명한 미리보기용 1.5x
+        const viewport = page.getViewport({ scale: 1.5 });
         const unscaledViewport = page.getViewport({ scale: 1.0 });
 
         const widthPt = unscaledViewport.width;
@@ -109,16 +195,20 @@ export default function PdfNumberingPage() {
         setPageWidthMm(widthMm);
         setPageHeightMm(heightMm);
 
-        // 기본 위치를 페이지 우측 상단으로 초기화
-        setPositions([
+        const initialPositions = [
           {
             id: "pos-1",
             name: "번호 1",
-            xMm: Math.max(10, Math.round(widthMm * 0.75)),
+            xMm: Math.max(10, Math.round(widthMm * 0.7)),
             yMm: 15,
           },
-        ]);
+        ];
+        setPositions(initialPositions);
         setActivePosId("pos-1");
+
+        // 초기 히스토리 저장
+        setHistory([{ positions: initialPositions, activePosId: "pos-1", fontSize: 18 }]);
+        setHistoryIndex(0);
 
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
@@ -146,18 +236,19 @@ export default function PdfNumberingPage() {
     setPageHeightMm(0);
     setPreviewImgUrl(null);
     setProgress(null);
+    setHistory([]);
+    setHistoryIndex(-1);
     const fileInput = document.getElementById("num-file-input") as HTMLInputElement;
     if (fileInput) fileInput.value = "";
   };
 
-  // 활성화된 위치 정보 가져오기
   const activePos = positions.find((p) => p.id === activePosId) || positions[0];
 
   const updateActivePos = (fields: Partial<NumberPosition>) => {
     if (!activePos) return;
-    setPositions((prev) =>
-      prev.map((p) => (p.id === activePos.id ? { ...p, ...fields } : p))
-    );
+    const next = positions.map((p) => (p.id === activePos.id ? { ...p, ...fields } : p));
+    setPositions(next);
+    saveSnapshot(next);
   };
 
   const addPosition = () => {
@@ -172,8 +263,10 @@ export default function PdfNumberingPage() {
       xMm: Math.min(pageWidthMm - 20, 20 + positions.length * 15),
       yMm: Math.min(pageHeightMm - 20, 20 + positions.length * 15),
     };
-    setPositions((prev) => [...prev, newPos]);
+    const next = [...positions, newPos];
+    setPositions(next);
     setActivePosId(newId);
+    saveSnapshot(next, undefined, newId);
   };
 
   const removePosition = (id: string) => {
@@ -181,59 +274,101 @@ export default function PdfNumberingPage() {
       alert("최소 1개의 번호 위치가 필요합니다.");
       return;
     }
-    const nextList = positions.filter((p) => p.id !== id);
-    setPositions(nextList);
-    if (activePosId === id) {
-      setActivePosId(nextList[0].id);
-    }
+    const next = positions.filter((p) => p.id !== id);
+    setPositions(next);
+    const nextActive = activePosId === id ? next[0].id : activePosId;
+    setActivePosId(nextActive);
+    saveSnapshot(next, undefined, nextActive);
   };
 
-  // 에디터 상에서 마우스 드래그로 박스 이동
-  const handleMouseDown = (e: React.MouseEvent, posId: string) => {
+  // --- 마우스 인터랙션 (이동 & 크기 조절) ---
+  const handleStartMove = (e: React.MouseEvent, posId: string) => {
     e.stopPropagation();
     setActivePosId(posId);
-    setDraggingPosId(posId);
+    setInteractionMode("move");
 
-    const pos = positions.find((p) => p.id === posId);
-    if (!pos || !editorContainerRef.current) return;
+    const targetPos = positions.find((p) => p.id === posId);
+    if (!targetPos) return;
 
-    const rect = editorContainerRef.current.getBoundingClientRect();
-    const currentPxX = (pos.xMm / pageWidthMm) * rect.width;
-    const currentPxY = (pos.yMm / pageHeightMm) * rect.height;
+    dragStartInfo.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPos: { ...targetPos },
+      initialFontSize: fontSize,
+    };
+  };
 
-    setDragOffset({
-      x: e.clientX - (rect.left + currentPxX),
-      y: e.clientY - (rect.top + currentPxY),
-    });
+  const handleStartResize = (e: React.MouseEvent, handle: ResizeHandle, posId: string) => {
+    e.stopPropagation();
+    setActivePosId(posId);
+    setInteractionMode("resize");
+    setActiveHandle(handle);
+
+    const targetPos = positions.find((p) => p.id === posId);
+    if (!targetPos) return;
+
+    dragStartInfo.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPos: { ...targetPos },
+      initialFontSize: fontSize,
+    };
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!draggingPosId || !editorContainerRef.current || !pageWidthMm || !pageHeightMm) return;
+      if (interactionMode === "idle" || !dragStartInfo.current || !editorContainerRef.current) return;
 
       const rect = editorContainerRef.current.getBoundingClientRect();
-      const rawX = e.clientX - rect.left - dragOffset.x;
-      const rawY = e.clientY - rect.top - dragOffset.y;
+      const deltaScreenX = e.clientX - dragStartInfo.current.startX;
+      const deltaScreenY = e.clientY - dragStartInfo.current.startY;
 
-      // 경계 제한 (0 ~ 100%)
-      const clampedX = Math.max(0, Math.min(rawX, rect.width));
-      const clampedY = Math.max(0, Math.min(rawY, rect.height));
+      if (interactionMode === "move") {
+        // mm 단위 변환
+        const deltaXMm = (deltaScreenX / rect.width) * pageWidthMm;
+        const deltaYMm = (deltaScreenY / rect.height) * pageHeightMm;
 
-      const newXMm = Math.round((clampedX / rect.width) * pageWidthMm * 10) / 10;
-      const newYMm = Math.round((clampedY / rect.height) * pageHeightMm * 10) / 10;
+        const newX = Math.max(0, Math.min(pageWidthMm, dragStartInfo.current.initialPos.xMm + deltaXMm));
+        const newY = Math.max(0, Math.min(pageHeightMm, dragStartInfo.current.initialPos.yMm + deltaYMm));
 
-      setPositions((prev) =>
-        prev.map((p) =>
-          p.id === draggingPosId ? { ...p, xMm: newXMm, yMm: newYMm } : p
-        )
-      );
+        setPositions((prev) =>
+          prev.map((p) =>
+            p.id === dragStartInfo.current!.initialPos.id
+              ? { ...p, xMm: Math.round(newX * 10) / 10, yMm: Math.round(newY * 10) / 10 }
+              : p
+          )
+        );
+      } else if (interactionMode === "resize") {
+        // 모서리 핸들 기준 크기(폰트 사이즈) 조절
+        let effectiveDelta = deltaScreenX;
+        if (activeHandle === "se") {
+          effectiveDelta = e.shiftKey ? Math.max(deltaScreenX, deltaScreenY) : (deltaScreenX + deltaScreenY) / 2;
+        } else if (activeHandle === "sw") {
+          effectiveDelta = e.shiftKey ? Math.max(-deltaScreenX, deltaScreenY) : (-deltaScreenX + deltaScreenY) / 2;
+        } else if (activeHandle === "ne") {
+          effectiveDelta = e.shiftKey ? Math.max(deltaScreenX, -deltaScreenY) : (deltaScreenX - deltaScreenY) / 2;
+        } else if (activeHandle === "nw") {
+          effectiveDelta = e.shiftKey ? Math.max(-deltaScreenX, -deltaScreenY) : (-deltaScreenX - deltaScreenY) / 2;
+        }
+
+        // 폰트 크기 증감 연산
+        const sizeDelta = effectiveDelta * 0.25;
+        const newSize = Math.max(8, Math.min(120, Math.round(dragStartInfo.current.initialFontSize + sizeDelta)));
+        setFontSize(newSize);
+      }
     };
 
     const handleMouseUp = () => {
-      setDraggingPosId(null);
+      if (interactionMode !== "idle") {
+        setInteractionMode("idle");
+        setActiveHandle(null);
+        dragStartInfo.current = null;
+        // 드래그 종료 시 히스토리 스택에 저장
+        saveSnapshot();
+      }
     };
 
-    if (draggingPosId) {
+    if (interactionMode !== "idle") {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     }
@@ -241,7 +376,18 @@ export default function PdfNumberingPage() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [draggingPosId, dragOffset, pageWidthMm, pageHeightMm]);
+  }, [interactionMode, activeHandle, pageWidthMm, pageHeightMm, saveSnapshot]);
+
+  // 마우스 휠 스크롤로 폰트 크기 미세 조절
+  const handleBoxWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY < 0 ? 1 : -1;
+    setFontSize((prev) => {
+      const next = Math.max(8, Math.min(120, prev + delta));
+      return next;
+    });
+  };
 
   // 배경 캔버스 클릭 시 활성 박스 해당 위치로 이동
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -264,13 +410,11 @@ export default function PdfNumberingPage() {
     setProgress({ current: 0, total: totalQuantity });
 
     try {
-      // 렌더링 락 방지를 위한 지연
       await new Promise((r) => setTimeout(r, 50));
 
       const srcDoc = await PDFDocument.load(fileBuffer);
       const outputDoc = await PDFDocument.create();
 
-      // 폰트 임베딩
       let embeddedFont = await outputDoc.embedFont(StandardFonts.CourierBold);
       if (fontFamily === "Helvetica") {
         embeddedFont = await outputDoc.embedFont(StandardFonts.HelveticaBold);
@@ -280,7 +424,6 @@ export default function PdfNumberingPage() {
 
       const { r, g, b } = hexToRgb(fontColor);
 
-      // 전체 번호 생성 루프
       const numbers: number[] = [];
       for (let n = startNum; n <= endNum; n += step) {
         numbers.push(n);
@@ -292,16 +435,13 @@ export default function PdfNumberingPage() {
         const currentNum = numbers[i];
         const formattedText = formatNumber(currentNum);
 
-        // 원본 첫 페이지 복제하여 새 문서에 추가
         const [copiedPage] = await outputDoc.copyPages(srcDoc, [0]);
         const page = outputDoc.addPage(copiedPage);
         const { height: pageH } = page.getSize();
 
-        // 등록된 모든 번호 위치에 drawText
         for (const pos of positions) {
           const ptX = pos.xMm * MM_TO_PT;
-          // PDF 좌표계(좌하단 원점) 변환: 텍스트 상단 기준 위치 맞춤
-          const ptY = pageH - (pos.yMm * MM_TO_PT) - (fontSize * 0.85);
+          const ptY = pageH - pos.yMm * MM_TO_PT - fontSize * 0.85;
 
           page.drawText(formattedText, {
             x: ptX,
@@ -312,7 +452,6 @@ export default function PdfNumberingPage() {
           });
         }
 
-        // 10장마다 프로그레스 업데이트 및 UI 스레드 양보
         if (i % 10 === 0 || i === numbers.length - 1) {
           setProgress({ current: i + 1, total: numbers.length });
           await new Promise((resolve) => setTimeout(resolve, 0));
@@ -343,17 +482,17 @@ export default function PdfNumberingPage() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <span className="bg-[#222222] text-[#F5F4F0] dark:bg-[#333333] dark:text-[#EAEAEA] px-2 py-0.5 text-[10px] font-black tracking-widest">
-              유틸리티 / 07
+              유틸리티 / 08
             </span>
             <span className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0] tracking-widest">
-              인쇄 및 터잡기 (조판)
+              PDF 편집 및 변환
             </span>
           </div>
           <h1 className="text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight">
-            PDF 일련번호(넘버링) 자동 생성
+            PDF 일련번호(넘버링) 생성기
           </h1>
           <p className="mt-2 text-sm font-bold text-[#666666] dark:text-[#A0A0A0]">
-            티켓, 상품권, 추첨권, 계약서 등 단일 양식에 지정한 위치마다 일련번호를 매겨 대량 PDF로 출력합니다.
+            마우스로 번호 박스를 끌어서 위치를 맞추고, 모서리 핸들로 글씨 크기를 직관적으로 조절할 수 있습니다.
           </p>
         </div>
       </header>
@@ -616,9 +755,12 @@ export default function PdfNumberingPage() {
                   <input
                     type="range"
                     min="8"
-                    max="48"
+                    max="72"
                     value={fontSize}
-                    onChange={(e) => setFontSize(Number(e.target.value))}
+                    onChange={(e) => {
+                      setFontSize(Number(e.target.value));
+                      saveSnapshot(undefined, Number(e.target.value));
+                    }}
                     className="w-full mt-2 cursor-pointer"
                   />
                 </div>
@@ -688,11 +830,11 @@ export default function PdfNumberingPage() {
         {/* 우측: 시각적 인터랙티브 에디터 */}
         <div className="lg:col-span-7 xl:col-span-8 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] flex flex-col h-[780px] overflow-hidden">
           {/* 상단 툴바 */}
-          <div className="bg-[#222222] dark:bg-[#111111] px-6 py-4 flex items-center justify-between border-b-2 border-[#222222] dark:border-[#444444] shrink-0 text-[#F5F4F0]">
+          <div className="bg-[#222222] dark:bg-[#111111] px-5 py-3.5 flex items-center justify-between border-b-2 border-[#222222] dark:border-[#444444] shrink-0 text-[#F5F4F0]">
             <div className="flex items-center gap-3">
               <span className="text-xs font-black tracking-widest uppercase flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[18px]">touch_app</span>
-                인터랙티브 위치 에디터
+                비주얼 에디터
               </span>
               {pageWidthMm > 0 && (
                 <span className="text-[11px] font-mono text-[#A0A0A0] bg-[#333333] px-2.5 py-0.5 border border-[#444444]">
@@ -700,18 +842,44 @@ export default function PdfNumberingPage() {
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-[#A0A0A0] hidden sm:block">
-              마우스로 번호 박스를 끌어서 원하는 위치에 놓으세요
-            </p>
+
+            {/* 히스토리 조작 툴바 (Undo / Redo / Shift 뱃지) */}
+            <div className="flex items-center gap-2">
+              {isShiftPressed && (
+                <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 animate-pulse">
+                  Shift: 비율 고정 중
+                </span>
+              )}
+
+              <div className="flex items-center border border-[#444444] bg-[#2A2A2A]">
+                <button
+                  onClick={undo}
+                  disabled={historyIndex <= 0}
+                  className="p-1.5 text-[#A0A0A0] hover:text-white disabled:opacity-30 disabled:hover:text-[#A0A0A0] transition-colors flex items-center"
+                  title="실행 취소 (Ctrl+Z)"
+                >
+                  <span className="material-symbols-outlined text-[18px]">undo</span>
+                </button>
+                <div className="w-[1px] h-4 bg-[#444444]" />
+                <button
+                  onClick={redo}
+                  disabled={historyIndex >= history.length - 1}
+                  className="p-1.5 text-[#A0A0A0] hover:text-white disabled:opacity-30 disabled:hover:text-[#A0A0A0] transition-colors flex items-center"
+                  title="다시 실행 (Ctrl+Y)"
+                >
+                  <span className="material-symbols-outlined text-[18px]">redo</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* 에디터 작업대 */}
-          <div className="flex-1 bg-[#2A2A2A] relative overflow-auto p-6 flex items-center justify-center">
+          <div className="flex-1 bg-[#2A2A2A] relative overflow-auto p-6 flex items-center justify-center select-none">
             {previewImgUrl ? (
               <div
                 ref={editorContainerRef}
                 onClick={handleCanvasClick}
-                className="relative shadow-[0_12px_24px_rgba(0,0,0,0.6)] cursor-crosshair select-none bg-white"
+                className="relative shadow-[0_12px_28px_rgba(0,0,0,0.7)] cursor-crosshair select-none bg-white"
                 style={{
                   width: "100%",
                   maxWidth: "680px",
@@ -735,22 +903,25 @@ export default function PdfNumberingPage() {
                   return (
                     <div
                       key={pos.id}
-                      onMouseDown={(e) => handleMouseDown(e, pos.id)}
-                      className={`absolute cursor-grab active:cursor-grabbing transform -translate-x-0 -translate-y-0 px-2 py-0.5 border-2 transition-shadow whitespace-nowrap select-none ${
+                      onMouseDown={(e) => handleStartMove(e, pos.id)}
+                      onWheel={handleBoxWheel}
+                      className={`absolute group cursor-move select-none transition-shadow ${
                         isActive
-                          ? "border-blue-600 bg-white/95 shadow-[0_0_0_3px_rgba(37,99,235,0.3)] z-30"
-                          : "border-gray-500 bg-white/80 opacity-80 hover:opacity-100 z-20"
+                          ? "ring-2 ring-blue-600 bg-white/95 shadow-[0_0_16px_rgba(37,99,235,0.4)] z-30"
+                          : "border-2 border-dashed border-gray-400 bg-white/80 opacity-80 hover:opacity-100 z-20"
                       }`}
                       style={{
                         left: `${leftPercent}%`,
                         top: `${topPercent}%`,
+                        padding: "4px 8px",
                       }}
                     >
-                      <div className="flex items-center gap-1.5">
+                      {/* 실제 텍스트 내용 */}
+                      <div className="flex items-center gap-2 pointer-events-none">
                         <span
-                          className="font-bold leading-none select-none"
+                          className="font-black leading-none whitespace-nowrap"
                           style={{
-                            fontSize: `${Math.max(10, fontSize * 0.9)}px`,
+                            fontSize: `${fontSize}px`,
                             color: fontColor,
                             fontFamily:
                               fontFamily === "Courier"
@@ -762,10 +933,42 @@ export default function PdfNumberingPage() {
                         >
                           {formatNumber(startNum)}
                         </span>
-                        <span className="text-[9px] font-black bg-blue-600 text-white px-1 py-0.2 rounded-xs">
+                        <span className="text-[10px] font-black bg-blue-600 text-white px-1.5 py-0.5 tracking-tight">
                           {pos.name}
                         </span>
                       </div>
+
+                      {/* 활성 박스일 때 표시되는 4개 모서리 리사이즈 핸들 */}
+                      {isActive && (
+                        <>
+                          {/* 좌측 상단 (nw) */}
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, "nw", pos.id)}
+                            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nwse-resize shadow-sm hover:scale-125 transition-transform"
+                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                          />
+                          {/* 우측 상단 (ne) */}
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, "ne", pos.id)}
+                            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
+                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                          />
+                          {/* 좌측 하단 (sw) */}
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, "sw", pos.id)}
+                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
+                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                          />
+                          {/* 우측 하단 (se - 메인 핸들) */}
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, "se", pos.id)}
+                            className="absolute -bottom-2 -right-2 w-3.5 h-3.5 bg-blue-600 border-2 border-white cursor-nwse-resize shadow-md hover:scale-125 transition-transform flex items-center justify-center"
+                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                          >
+                            <span className="w-1 h-1 bg-white rounded-full" />
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -779,25 +982,53 @@ export default function PdfNumberingPage() {
                   양식 PDF 원고를 좌측에 업로드하면
                 </p>
                 <p className="text-xs text-[#888888] mt-1">
-                  이곳에 문서가 표시되며 마우스로 일련번호 위치를 지정할 수 있습니다.
+                  이곳에 문서가 표시되며 마우스로 드래그하여 번호 위치와 크기를 조절할 수 있습니다.
                 </p>
               </div>
             )}
           </div>
 
-          {/* 하단 안내 바 */}
+          {/* 하단 단축키 안내 바 */}
           <div className="bg-[#F5F4F0] dark:bg-[#1E1E1E] border-t-2 border-[#222222] dark:border-[#444444] px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-bold text-[#666666] dark:text-[#A0A0A0] shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[16px] text-[#222222] dark:text-[#EAEAEA]">
-                info
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-1">
+                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
+                  마우스 드래그
+                </kbd>
+                위치 이동
               </span>
-              <span>
-                화면의 박스를 드래그하거나 클릭하여 위치를 이동할 수 있습니다. (정확한 수치는 좌측 X/Y 입력)
+              <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
+              <span className="flex items-center gap-1">
+                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
+                  모서리 핸들
+                </kbd>
+                크기 조절
+              </span>
+              <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
+              <span className="flex items-center gap-1">
+                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
+                  Shift
+                </kbd>
+                정비율 고정
+              </span>
+              <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
+              <span className="flex items-center gap-1">
+                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
+                  Ctrl + Z
+                </kbd>
+                실행 취소
+              </span>
+              <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
+              <span className="flex items-center gap-1">
+                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
+                  휠 스크롤
+                </kbd>
+                폰트 크기 미세 조절
               </span>
             </div>
             {fileBuffer && (
               <span className="text-blue-600 dark:text-blue-400 font-black">
-                {totalQuantity}장 연속 생성 준비 완료
+                {totalQuantity}장 연속 생성 준비
               </span>
             )}
           </div>

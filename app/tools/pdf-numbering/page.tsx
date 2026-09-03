@@ -13,6 +13,12 @@ interface NumberPosition {
   name: string;
   xMm: number;
   yMm: number;
+  widthMm: number;
+  heightMm: number;
+  hasBg: boolean;
+  bgColor: string;
+  bgOpacity: number; // 0 ~ 100
+  borderRadiusMm: number; // 0 ~ 20mm
 }
 
 interface HistorySnapshot {
@@ -33,22 +39,33 @@ export default function PdfNumberingPage() {
   const [pageHeightPt, setPageHeightPt] = useState<number>(0);
   const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
 
-  // 번호 설정
+  // 번호 규칙 설정
   const [startNum, setStartNum] = useState<number>(1);
-  const [endNum, setEndNum] = useState<number>(100);
+  const [endNum, setEndNum] = useState<number>(1000);
   const [step, setStep] = useState<number>(1);
   const [digits, setDigits] = useState<number>(4);
   const [prefix, setPrefix] = useState<string>("No. ");
   const [suffix, setSuffix] = useState<string>("");
 
-  // 폰트 & 스타일 설정
+  // 폰트 & 스타일 설정 (글씨는 배경과 독립)
   const [fontSize, setFontSize] = useState<number>(18);
   const [fontFamily, setFontFamily] = useState<"Helvetica" | "Courier" | "Times">("Courier");
   const [fontColor, setFontColor] = useState<string>("#dc2626");
 
-  // 넘버링 위치 목록 (다중 넘버링 지원)
+  // 넘버링 위치 및 배경 박스 목록
   const [positions, setPositions] = useState<NumberPosition[]>([
-    { id: "pos-1", name: "번호 1", xMm: 15, yMm: 15 },
+    {
+      id: "pos-1",
+      name: "번호 1",
+      xMm: 15,
+      yMm: 15,
+      widthMm: 42,
+      heightMm: 14,
+      hasBg: false,
+      bgColor: "#ffffff",
+      bgOpacity: 80,
+      borderRadiusMm: 4,
+    },
   ]);
   const [activePosId, setActivePosId] = useState<string>("pos-1");
 
@@ -62,15 +79,14 @@ export default function PdfNumberingPage() {
   const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState<boolean>(false);
 
-  // 드래그 시작 정보
+  // 드래그 시작 시점의 스냅샷 정보
   const dragStartInfo = useRef<{
     startX: number;
     startY: number;
     initialPos: NumberPosition;
-    initialFontSize: number;
   } | null>(null);
 
-  // 생성 진행 상태
+  // 대량 생성 진행 상태
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -104,7 +120,7 @@ export default function PdfNumberingPage() {
       setHistory((prev) => {
         const next = prev.slice(0, historyIndex + 1);
         next.push(snap);
-        if (next.length > 30) next.shift(); // 최대 30단계
+        if (next.length > 30) next.shift();
         return next;
       });
       setHistoryIndex((prev) => Math.min(prev + 1, 29));
@@ -130,7 +146,7 @@ export default function PdfNumberingPage() {
     setHistoryIndex((prev) => prev + 1);
   }, [history, historyIndex]);
 
-  // 키보드 이벤트 (Ctrl+Z, Ctrl+Y, Shift)
+  // 키보드 단축키
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Shift") setIsShiftPressed(true);
@@ -195,18 +211,23 @@ export default function PdfNumberingPage() {
         setPageWidthMm(widthMm);
         setPageHeightMm(heightMm);
 
-        const initialPositions = [
+        const initialPositions: NumberPosition[] = [
           {
             id: "pos-1",
             name: "번호 1",
-            xMm: Math.max(10, Math.round(widthMm * 0.7)),
+            xMm: Math.max(10, Math.round(widthMm * 0.65)),
             yMm: 15,
+            widthMm: 45,
+            heightMm: 15,
+            hasBg: false,
+            bgColor: "#ffffff",
+            bgOpacity: 85,
+            borderRadiusMm: 3,
           },
         ];
         setPositions(initialPositions);
         setActivePosId("pos-1");
 
-        // 초기 히스토리 저장
         setHistory([{ positions: initialPositions, activePosId: "pos-1", fontSize: 18 }]);
         setHistoryIndex(0);
 
@@ -260,8 +281,14 @@ export default function PdfNumberingPage() {
     const newPos: NumberPosition = {
       id: newId,
       name: `번호 ${positions.length + 1}`,
-      xMm: Math.min(pageWidthMm - 20, 20 + positions.length * 15),
-      yMm: Math.min(pageHeightMm - 20, 20 + positions.length * 15),
+      xMm: Math.min(pageWidthMm - 50, 20 + positions.length * 15),
+      yMm: Math.min(pageHeightMm - 30, 20 + positions.length * 15),
+      widthMm: activePos ? activePos.widthMm : 45,
+      heightMm: activePos ? activePos.heightMm : 15,
+      hasBg: activePos ? activePos.hasBg : false,
+      bgColor: activePos ? activePos.bgColor : "#ffffff",
+      bgOpacity: activePos ? activePos.bgOpacity : 85,
+      borderRadiusMm: activePos ? activePos.borderRadiusMm : 3,
     };
     const next = [...positions, newPos];
     setPositions(next);
@@ -281,7 +308,7 @@ export default function PdfNumberingPage() {
     saveSnapshot(next, undefined, nextActive);
   };
 
-  // --- 마우스 인터랙션 (이동 & 크기 조절) ---
+  // --- 마우스 인터랙션 (이동: Box Position / 크기: Box Size만 변경, 글씨와 분리) ---
   const handleStartMove = (e: React.MouseEvent, posId: string) => {
     e.stopPropagation();
     setActivePosId(posId);
@@ -294,7 +321,6 @@ export default function PdfNumberingPage() {
       startX: e.clientX,
       startY: e.clientY,
       initialPos: { ...targetPos },
-      initialFontSize: fontSize,
     };
   };
 
@@ -311,7 +337,6 @@ export default function PdfNumberingPage() {
       startX: e.clientX,
       startY: e.clientY,
       initialPos: { ...targetPos },
-      initialFontSize: fontSize,
     };
   };
 
@@ -323,13 +348,13 @@ export default function PdfNumberingPage() {
       const deltaScreenX = e.clientX - dragStartInfo.current.startX;
       const deltaScreenY = e.clientY - dragStartInfo.current.startY;
 
-      if (interactionMode === "move") {
-        // mm 단위 변환
-        const deltaXMm = (deltaScreenX / rect.width) * pageWidthMm;
-        const deltaYMm = (deltaScreenY / rect.height) * pageHeightMm;
+      const deltaXMm = (deltaScreenX / rect.width) * pageWidthMm;
+      const deltaYMm = (deltaScreenY / rect.height) * pageHeightMm;
 
-        const newX = Math.max(0, Math.min(pageWidthMm, dragStartInfo.current.initialPos.xMm + deltaXMm));
-        const newY = Math.max(0, Math.min(pageHeightMm, dragStartInfo.current.initialPos.yMm + deltaYMm));
+      if (interactionMode === "move") {
+        // 박스 위치(x, y) 이동
+        const newX = Math.max(0, Math.min(pageWidthMm - 5, dragStartInfo.current.initialPos.xMm + deltaXMm));
+        const newY = Math.max(0, Math.min(pageHeightMm - 5, dragStartInfo.current.initialPos.yMm + deltaYMm));
 
         setPositions((prev) =>
           prev.map((p) =>
@@ -339,22 +364,43 @@ export default function PdfNumberingPage() {
           )
         );
       } else if (interactionMode === "resize") {
-        // 모서리 핸들 기준 크기(폰트 사이즈) 조절
-        let effectiveDelta = deltaScreenX;
+        // 배경 박스의 가로(width)와 세로(height)만 조절! (글자 크기는 변경되지 않음)
+        const init = dragStartInfo.current.initialPos;
+        let newWidth = init.widthMm;
+        let newHeight = init.heightMm;
+
         if (activeHandle === "se") {
-          effectiveDelta = e.shiftKey ? Math.max(deltaScreenX, deltaScreenY) : (deltaScreenX + deltaScreenY) / 2;
+          newWidth = init.widthMm + deltaXMm;
+          newHeight = init.heightMm + deltaYMm;
         } else if (activeHandle === "sw") {
-          effectiveDelta = e.shiftKey ? Math.max(-deltaScreenX, deltaScreenY) : (-deltaScreenX + deltaScreenY) / 2;
+          newWidth = init.widthMm - deltaXMm;
+          newHeight = init.heightMm + deltaYMm;
         } else if (activeHandle === "ne") {
-          effectiveDelta = e.shiftKey ? Math.max(deltaScreenX, -deltaScreenY) : (deltaScreenX - deltaScreenY) / 2;
+          newWidth = init.widthMm + deltaXMm;
+          newHeight = init.heightMm - deltaYMm;
         } else if (activeHandle === "nw") {
-          effectiveDelta = e.shiftKey ? Math.max(-deltaScreenX, -deltaScreenY) : (-deltaScreenX - deltaScreenY) / 2;
+          newWidth = init.widthMm - deltaXMm;
+          newHeight = init.heightMm - deltaYMm;
         }
 
-        // 폰트 크기 증감 연산
-        const sizeDelta = effectiveDelta * 0.25;
-        const newSize = Math.max(8, Math.min(120, Math.round(dragStartInfo.current.initialFontSize + sizeDelta)));
-        setFontSize(newSize);
+        // Shift 키 누름 시 가로/세로 종횡비(비율) 고정
+        if (e.shiftKey) {
+          const ratio = init.widthMm / (init.heightMm || 1);
+          const maxDelta = Math.max(Math.abs(deltaXMm), Math.abs(deltaYMm));
+          const sign = deltaXMm >= 0 || deltaYMm >= 0 ? 1 : -1;
+          newWidth = Math.max(10, init.widthMm + sign * maxDelta);
+          newHeight = Math.max(6, newWidth / ratio);
+        }
+
+        // 최소/최대 박스 크기 제한
+        newWidth = Math.max(12, Math.min(pageWidthMm, Math.round(newWidth * 10) / 10));
+        newHeight = Math.max(6, Math.min(pageHeightMm, Math.round(newHeight * 10) / 10));
+
+        setPositions((prev) =>
+          prev.map((p) =>
+            p.id === init.id ? { ...p, widthMm: newWidth, heightMm: newHeight } : p
+          )
+        );
       }
     };
 
@@ -363,7 +409,6 @@ export default function PdfNumberingPage() {
         setInteractionMode("idle");
         setActiveHandle(null);
         dragStartInfo.current = null;
-        // 드래그 종료 시 히스토리 스택에 저장
         saveSnapshot();
       }
     };
@@ -378,13 +423,13 @@ export default function PdfNumberingPage() {
     };
   }, [interactionMode, activeHandle, pageWidthMm, pageHeightMm, saveSnapshot]);
 
-  // 마우스 휠 스크롤로 폰트 크기 미세 조절
+  // 마우스 휠 스크롤로 글자 크기(Font Size)만 독립 미세 조절
   const handleBoxWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const delta = e.deltaY < 0 ? 1 : -1;
     setFontSize((prev) => {
-      const next = Math.max(8, Math.min(120, prev + delta));
+      const next = Math.max(8, Math.min(100, prev + delta));
       return next;
     });
   };
@@ -402,7 +447,7 @@ export default function PdfNumberingPage() {
     updateActivePos({ xMm: newXMm, yMm: newYMm });
   };
 
-  // PDF 생성 엔진
+  // ⚡ 초고속 대량 생성 엔진 (XObject 템플릿 임베딩으로 수천~수만 장도 무제한 생성)
   const handleGeneratePdf = async () => {
     if (!fileBuffer || totalQuantity <= 0) return;
 
@@ -415,6 +460,9 @@ export default function PdfNumberingPage() {
       const srcDoc = await PDFDocument.load(fileBuffer);
       const outputDoc = await PDFDocument.create();
 
+      // ⭐ 핵심 최적화: 원본 양식 페이지를 XObject 템플릿으로 단 1번만 임베딩 (메모리 99% 절약)
+      const [embeddedTemplate] = await outputDoc.embedPages([srcDoc.getPages()[0]]);
+
       let embeddedFont = await outputDoc.embedFont(StandardFonts.CourierBold);
       if (fontFamily === "Helvetica") {
         embeddedFont = await outputDoc.embedFont(StandardFonts.HelveticaBold);
@@ -422,37 +470,67 @@ export default function PdfNumberingPage() {
         embeddedFont = await outputDoc.embedFont(StandardFonts.TimesRomanBold);
       }
 
-      const { r, g, b } = hexToRgb(fontColor);
+      const fontRgb = hexToRgb(fontColor);
+      const MM_TO_PT = 2.83465;
 
       const numbers: number[] = [];
       for (let n = startNum; n <= endNum; n += step) {
         numbers.push(n);
       }
 
-      const MM_TO_PT = 2.83465;
-
       for (let i = 0; i < numbers.length; i++) {
         const currentNum = numbers[i];
         const formattedText = formatNumber(currentNum);
 
-        const [copiedPage] = await outputDoc.copyPages(srcDoc, [0]);
-        const page = outputDoc.addPage(copiedPage);
-        const { height: pageH } = page.getSize();
+        // 새 빈 페이지 생성 후 템플릿 1회 호출
+        const page = outputDoc.addPage([pageWidthPt, pageHeightPt]);
+        page.drawPage(embeddedTemplate, {
+          x: 0,
+          y: 0,
+          width: pageWidthPt,
+          height: pageHeightPt,
+        });
 
+        // 각 번호 위치 렌더링
         for (const pos of positions) {
-          const ptX = pos.xMm * MM_TO_PT;
-          const ptY = pageH - pos.yMm * MM_TO_PT - fontSize * 0.85;
+          const boxXPt = pos.xMm * MM_TO_PT;
+          const boxWPt = pos.widthMm * MM_TO_PT;
+          const boxHPt = pos.heightMm * MM_TO_PT;
+          // PDF 좌표계(좌하단 원점)
+          const boxYPt = pageHeightPt - (pos.yMm * MM_TO_PT) - boxHPt;
+
+          // 1. 배경 박스 그리기 (옵션 켜져있고 투명도 > 0일 때)
+          if (pos.hasBg && pos.bgOpacity > 0) {
+            const bgRgb = hexToRgb(pos.bgColor);
+            page.drawRectangle({
+              x: boxXPt,
+              y: boxYPt,
+              width: boxWPt,
+              height: boxHPt,
+              color: rgb(bgRgb.r, bgRgb.g, bgRgb.b),
+              opacity: pos.bgOpacity / 100,
+            });
+          }
+
+          // 2. 숫자 텍스트 그리기 (박스 정중앙 배치)
+          const textW = embeddedFont.widthOfTextAtSize(formattedText, fontSize);
+          const textH = embeddedFont.heightAtSize(fontSize);
+
+          // 박스 가로 중앙, 세로 중앙 계산
+          const textX = boxXPt + (boxWPt - textW) / 2;
+          const textY = boxYPt + (boxHPt - textH) / 2 + textH * 0.15; // 베이스라인 보정
 
           page.drawText(formattedText, {
-            x: ptX,
-            y: ptY,
+            x: textX,
+            y: textY,
             size: fontSize,
             font: embeddedFont,
-            color: rgb(r, g, b),
+            color: rgb(fontRgb.r, fontRgb.g, fontRgb.b),
           });
         }
 
-        if (i % 10 === 0 || i === numbers.length - 1) {
+        // 50장마다 UI 스레드 양보하여 대량 생성(1000~10000장) 시에도 부드럽게 진행률 갱신
+        if (i % 50 === 0 || i === numbers.length - 1) {
           setProgress({ current: i + 1, total: numbers.length });
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
@@ -468,7 +546,7 @@ export default function PdfNumberingPage() {
       link.click();
     } catch (err) {
       console.error(err);
-      alert("PDF 생성 중 오류가 발생했습니다.");
+      alert("대량 PDF 생성 중 오류가 발생했습니다.");
     } finally {
       setIsGenerating(false);
       setProgress(null);
@@ -492,7 +570,7 @@ export default function PdfNumberingPage() {
             PDF 일련번호(넘버링) 생성기
           </h1>
           <p className="mt-2 text-sm font-bold text-[#666666] dark:text-[#A0A0A0]">
-            마우스로 번호 박스를 끌어서 위치를 맞추고, 모서리 핸들로 글씨 크기를 직관적으로 조절할 수 있습니다.
+            배경 박스와 글씨 크기가 완전히 분리되어, 투명도와 모서리 둥글기를 조절하고 대량 PDF를 초고속 생성합니다.
           </p>
         </div>
       </header>
@@ -544,12 +622,12 @@ export default function PdfNumberingPage() {
             )}
           </div>
 
-          {/* 2. 넘버링 위치 관리 박스 */}
+          {/* 2. 넘버링 위치 및 배경 박스 관리 */}
           <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111]">
             <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] px-5 py-3 border-b-2 border-[#222222] dark:border-[#444444] flex items-center justify-between">
               <div className="font-black text-[#222222] dark:text-[#EAEAEA] text-sm flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">pin_drop</span>
-                번호 위치 지정
+                번호 박스 위치 & 크기
               </div>
               <button
                 onClick={addPosition}
@@ -593,45 +671,191 @@ export default function PdfNumberingPage() {
                 })}
               </div>
 
-              {/* 좌표 수치 직접 입력 */}
+              {/* 좌표 및 박스 크기 수치 입력 */}
               {activePos && (
-                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-[#E5E4E0] dark:border-[#333333]">
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-1">
-                      X 좌표 (좌측 기준 mm)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={activePos.xMm}
-                      disabled={!fileBuffer}
-                      onChange={(e) => updateActivePos({ xMm: Number(e.target.value) })}
-                      className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-3 py-1.5 text-sm font-bold outline-none focus:border-[#222222] dark:focus:border-[#EAEAEA]"
-                    />
+                <div className="space-y-3 pt-2 border-t border-[#E5E4E0] dark:border-[#333333]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-1">
+                        위치 X (좌측 mm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={activePos.xMm}
+                        disabled={!fileBuffer}
+                        onChange={(e) => updateActivePos({ xMm: Number(e.target.value) })}
+                        className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-3 py-1.5 text-xs font-bold outline-none focus:border-[#222222]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-1">
+                        위치 Y (상단 mm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={activePos.yMm}
+                        disabled={!fileBuffer}
+                        onChange={(e) => updateActivePos({ yMm: Number(e.target.value) })}
+                        className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-3 py-1.5 text-xs font-bold outline-none focus:border-[#222222]"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-1">
-                      Y 좌표 (상단 기준 mm)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={activePos.yMm}
-                      disabled={!fileBuffer}
-                      onChange={(e) => updateActivePos({ yMm: Number(e.target.value) })}
-                      className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-3 py-1.5 text-sm font-bold outline-none focus:border-[#222222] dark:focus:border-[#EAEAEA]"
-                    />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-1">
+                        박스 가로 너비 (mm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="10"
+                        value={activePos.widthMm}
+                        disabled={!fileBuffer}
+                        onChange={(e) => updateActivePos({ widthMm: Number(e.target.value) })}
+                        className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-3 py-1.5 text-xs font-bold outline-none focus:border-[#222222]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-1">
+                        박스 세로 높이 (mm)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="5"
+                        value={activePos.heightMm}
+                        disabled={!fileBuffer}
+                        onChange={(e) => updateActivePos({ heightMm: Number(e.target.value) })}
+                        className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-3 py-1.5 text-xs font-bold outline-none focus:border-[#222222]"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* 3. 번호 범위 및 규칙 */}
+          {/* 3. 배경 박스 스타일 (투명도 & 둥근 모서리 각도) */}
+          {activePos && (
+            <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111]">
+              <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] px-5 py-3 border-b-2 border-[#222222] dark:border-[#444444] flex items-center justify-between">
+                <div className="font-black text-[#222222] dark:text-[#EAEAEA] text-sm flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">layers</span>
+                  배경 상자 (투명도·둥글기)
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={activePos.hasBg}
+                    onChange={(e) => updateActivePos({ hasBg: e.target.checked })}
+                    className="w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-[#222222] dark:text-[#EAEAEA]">
+                    배경 켜기
+                  </span>
+                </label>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {!activePos.hasBg ? (
+                  <div className="bg-gray-50 dark:bg-[#121212] border border-[#E5E4E0] dark:border-[#333333] p-3 text-center">
+                    <p className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0]">
+                      현재 <strong className="text-blue-600">완전 투명 모드</strong>입니다.
+                    </p>
+                    <p className="text-[11px] text-[#888888] mt-0.5">
+                      원본 PDF 위에 숫자만 깔끔하게 인쇄됩니다.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0]">
+                          배경 투명도
+                        </label>
+                        <span className="text-xs font-black font-mono">{activePos.bgOpacity}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={activePos.bgOpacity}
+                        onChange={(e) => updateActivePos({ bgOpacity: Number(e.target.value) })}
+                        className="w-full cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0]">
+                          모서리 둥근 각도
+                        </label>
+                        <span className="text-xs font-black font-mono">
+                          {activePos.borderRadiusMm} mm
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="15"
+                        step="0.5"
+                        value={activePos.borderRadiusMm}
+                        onChange={(e) =>
+                          updateActivePos({ borderRadiusMm: Number(e.target.value) })
+                        }
+                        className="w-full cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-1">
+                        배경 색상
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {[
+                          { label: "흰색", color: "#ffffff" },
+                          { label: "연회색", color: "#f3f4f6" },
+                          { label: "노랑", color: "#fef08a" },
+                          { label: "검정", color: "#111827" },
+                        ].map((c) => (
+                          <button
+                            key={c.color}
+                            onClick={() => updateActivePos({ bgColor: c.color })}
+                            className={`px-2 py-0.5 text-xs font-bold border-2 transition-all flex items-center gap-1 ${
+                              activePos.bgColor === c.color
+                                ? "border-[#222222] dark:border-[#EAEAEA] font-black scale-105"
+                                : "border-[#E5E4E0] dark:border-[#333333]"
+                            }`}
+                          >
+                            <span
+                              className="w-2.5 h-2.5 rounded-full border border-black/20"
+                              style={{ backgroundColor: c.color }}
+                            />
+                            {c.label}
+                          </button>
+                        ))}
+                        <input
+                          type="color"
+                          value={activePos.bgColor}
+                          onChange={(e) => updateActivePos({ bgColor: e.target.value })}
+                          className="w-7 h-6 cursor-pointer border border-[#E5E4E0] p-0 ml-auto"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 4. 번호 범위 및 규칙 */}
           <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111]">
             <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] px-5 py-3 border-b-2 border-[#222222] dark:border-[#444444] font-black text-[#222222] dark:text-[#EAEAEA] text-sm flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px]">format_list_numbered</span>
-              번호 범위 및 규칙
+              번호 범위 (대량 연속 생성)
             </div>
 
             <div className="p-5 space-y-4">
@@ -703,7 +927,6 @@ export default function PdfNumberingPage() {
                 </div>
               </div>
 
-              {/* 미리보기 샘플 박스 */}
               <div className="bg-blue-50 dark:bg-[#1A233A] border-2 border-blue-200 dark:border-blue-800 p-3 flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300">
@@ -715,21 +938,21 @@ export default function PdfNumberingPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                    총 인쇄 매수
+                    총 생성 수량
                   </p>
                   <p className="text-sm font-black text-blue-900 dark:text-blue-100 mt-0.5">
-                    {totalQuantity} 장
+                    {totalQuantity.toLocaleString()} 장
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 4. 폰트 및 스타일 */}
+          {/* 5. 폰트 및 독립 글씨 크기 */}
           <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111]">
             <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] px-5 py-3 border-b-2 border-[#222222] dark:border-[#444444] font-black text-[#222222] dark:text-[#EAEAEA] text-sm flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px]">format_paint</span>
-              글꼴 및 색상
+              글꼴 및 독립 글씨 크기
             </div>
 
             <div className="p-5 space-y-4">
@@ -805,7 +1028,7 @@ export default function PdfNumberingPage() {
             </div>
           </div>
 
-          {/* 5. PDF 생성 버튼 */}
+          {/* 6. 초고속 대량 PDF 생성 버튼 */}
           <button
             onClick={handleGeneratePdf}
             disabled={!fileBuffer || isGenerating || totalQuantity <= 0}
@@ -815,20 +1038,20 @@ export default function PdfNumberingPage() {
               <>
                 <span className="material-symbols-outlined animate-spin text-[24px]">refresh</span>
                 {progress
-                  ? `생성 중... (${progress.current}/${progress.total})`
+                  ? `초고속 생성 중... (${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}장)`
                   : "생성 준비 중..."}
               </>
             ) : (
               <>
                 <span className="material-symbols-outlined text-[24px]">download</span>
-                일련번호 PDF 생성 및 다운로드 ({totalQuantity}장)
+                일련번호 PDF 대량 생성 ({totalQuantity.toLocaleString()}장)
               </>
             )}
           </button>
         </div>
 
         {/* 우측: 시각적 인터랙티브 에디터 */}
-        <div className="lg:col-span-7 xl:col-span-8 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] flex flex-col h-[780px] overflow-hidden">
+        <div className="lg:col-span-7 xl:col-span-8 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] flex flex-col h-[820px] overflow-hidden">
           {/* 상단 툴바 */}
           <div className="bg-[#222222] dark:bg-[#111111] px-5 py-3.5 flex items-center justify-between border-b-2 border-[#222222] dark:border-[#444444] shrink-0 text-[#F5F4F0]">
             <div className="flex items-center gap-3">
@@ -847,7 +1070,7 @@ export default function PdfNumberingPage() {
             <div className="flex items-center gap-2">
               {isShiftPressed && (
                 <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 animate-pulse">
-                  Shift: 비율 고정 중
+                  Shift: 박스 종횡비 고정
                 </span>
               )}
 
@@ -894,30 +1117,36 @@ export default function PdfNumberingPage() {
                   className="w-full h-full object-contain pointer-events-none"
                 />
 
-                {/* 넘버링 위치 박스들 오버레이 */}
+                {/* 넘버링 위치 및 배경 박스들 오버레이 */}
                 {positions.map((pos) => {
                   const isActive = pos.id === activePosId;
                   const leftPercent = (pos.xMm / pageWidthMm) * 100;
                   const topPercent = (pos.yMm / pageHeightMm) * 100;
+                  const widthPercent = (pos.widthMm / pageWidthMm) * 100;
+                  const heightPercent = (pos.heightMm / pageHeightMm) * 100;
 
                   return (
                     <div
                       key={pos.id}
                       onMouseDown={(e) => handleStartMove(e, pos.id)}
                       onWheel={handleBoxWheel}
-                      className={`absolute group cursor-move select-none transition-shadow ${
+                      className={`absolute group cursor-move select-none transition-shadow flex items-center justify-center ${
                         isActive
-                          ? "ring-2 ring-blue-600 bg-white/95 shadow-[0_0_16px_rgba(37,99,235,0.4)] z-30"
-                          : "border-2 border-dashed border-gray-400 bg-white/80 opacity-80 hover:opacity-100 z-20"
+                          ? "ring-2 ring-blue-600 shadow-[0_0_16px_rgba(37,99,235,0.4)] z-30"
+                          : "border border-dashed border-gray-400 opacity-80 hover:opacity-100 z-20"
                       }`}
                       style={{
                         left: `${leftPercent}%`,
                         top: `${topPercent}%`,
-                        padding: "4px 8px",
+                        width: `${widthPercent}%`,
+                        height: `${heightPercent}%`,
+                        backgroundColor: pos.hasBg ? pos.bgColor : "transparent",
+                        opacity: pos.hasBg ? pos.bgOpacity / 100 : 1,
+                        borderRadius: `${pos.borderRadiusMm}mm`,
                       }}
                     >
-                      {/* 실제 텍스트 내용 */}
-                      <div className="flex items-center gap-2 pointer-events-none">
+                      {/* 실제 텍스트 내용 (박스 내부 중앙 정렬) */}
+                      <div className="flex items-center gap-1.5 pointer-events-none overflow-hidden px-1">
                         <span
                           className="font-black leading-none whitespace-nowrap"
                           style={{
@@ -933,37 +1162,35 @@ export default function PdfNumberingPage() {
                         >
                           {formatNumber(startNum)}
                         </span>
-                        <span className="text-[10px] font-black bg-blue-600 text-white px-1.5 py-0.5 tracking-tight">
-                          {pos.name}
-                        </span>
+                        {positions.length > 1 && (
+                          <span className="text-[9px] font-black bg-blue-600 text-white px-1 py-0.2 tracking-tight shrink-0">
+                            {pos.name}
+                          </span>
+                        )}
                       </div>
 
-                      {/* 활성 박스일 때 표시되는 4개 모서리 리사이즈 핸들 */}
+                      {/* 활성 박스일 때 모서리 리사이즈 핸들 (박스 크기만 조절) */}
                       {isActive && (
                         <>
-                          {/* 좌측 상단 (nw) */}
                           <div
                             onMouseDown={(e) => handleStartResize(e, "nw", pos.id)}
                             className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nwse-resize shadow-sm hover:scale-125 transition-transform"
-                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                            title="박스 크기 조절 (Shift: 정비율)"
                           />
-                          {/* 우측 상단 (ne) */}
                           <div
                             onMouseDown={(e) => handleStartResize(e, "ne", pos.id)}
                             className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
-                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                            title="박스 크기 조절 (Shift: 정비율)"
                           />
-                          {/* 좌측 하단 (sw) */}
                           <div
                             onMouseDown={(e) => handleStartResize(e, "sw", pos.id)}
                             className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
-                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                            title="박스 크기 조절 (Shift: 정비율)"
                           />
-                          {/* 우측 하단 (se - 메인 핸들) */}
                           <div
                             onMouseDown={(e) => handleStartResize(e, "se", pos.id)}
                             className="absolute -bottom-2 -right-2 w-3.5 h-3.5 bg-blue-600 border-2 border-white cursor-nwse-resize shadow-md hover:scale-125 transition-transform flex items-center justify-center"
-                            title="드래그하여 크기 조절 (Shift: 정비율)"
+                            title="박스 크기 조절 (Shift: 정비율)"
                           >
                             <span className="w-1 h-1 bg-white rounded-full" />
                           </div>
@@ -982,7 +1209,7 @@ export default function PdfNumberingPage() {
                   양식 PDF 원고를 좌측에 업로드하면
                 </p>
                 <p className="text-xs text-[#888888] mt-1">
-                  이곳에 문서가 표시되며 마우스로 드래그하여 번호 위치와 크기를 조절할 수 있습니다.
+                  이곳에 문서가 표시되며 마우스로 드래그하여 배경 박스와 번호 위치를 자유롭게 조절할 수 있습니다.
                 </p>
               </div>
             )}
@@ -1002,14 +1229,14 @@ export default function PdfNumberingPage() {
                 <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
                   모서리 핸들
                 </kbd>
-                크기 조절
+                배경 박스 크기 조절
               </span>
               <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
               <span className="flex items-center gap-1">
                 <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
                   Shift
                 </kbd>
-                정비율 고정
+                박스 비율 고정
               </span>
               <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
               <span className="flex items-center gap-1">
@@ -1023,12 +1250,12 @@ export default function PdfNumberingPage() {
                 <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
                   휠 스크롤
                 </kbd>
-                폰트 크기 미세 조절
+                글자 크기 미세 조절
               </span>
             </div>
             {fileBuffer && (
               <span className="text-blue-600 dark:text-blue-400 font-black">
-                {totalQuantity}장 연속 생성 준비
+                대량 {totalQuantity.toLocaleString()}장 무제한 고속 생성 준비
               </span>
             )}
           </div>

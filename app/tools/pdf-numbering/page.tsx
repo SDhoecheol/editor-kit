@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -17,8 +17,8 @@ interface NumberPosition {
   heightMm: number;
   hasBg: boolean;
   bgColor: string;
-  bgOpacity: number; // 0 ~ 100
-  borderRadiusMm: number; // 0 ~ 20mm
+  bgOpacity: number;
+  borderRadiusMm: number;
 }
 
 interface HistorySnapshot {
@@ -30,9 +30,11 @@ interface HistorySnapshot {
 type ResizeHandle = "nw" | "ne" | "se" | "sw";
 
 export default function PdfNumberingPage() {
+  // 모드 전환: "single" (단일 매수 출력) vs "stack" (인쇄 조판 Cut & Stack)
+  const [outputMode, setOutputMode] = useState<"single" | "stack">("single");
+
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
-  const [pageCount, setPageCount] = useState<number>(0);
   const [pageWidthMm, setPageWidthMm] = useState<number>(0);
   const [pageHeightMm, setPageHeightMm] = useState<number>(0);
   const [pageWidthPt, setPageWidthPt] = useState<number>(0);
@@ -47,20 +49,20 @@ export default function PdfNumberingPage() {
   const [prefix, setPrefix] = useState<string>("No. ");
   const [suffix, setSuffix] = useState<string>("");
 
-  // 폰트 & 스타일 설정 (글씨는 배경과 독립)
+  // 폰트 & 스타일 설정
   const [fontSize, setFontSize] = useState<number>(14);
   const [fontFamily, setFontFamily] = useState<"Helvetica" | "Courier" | "Times">("Courier");
   const [fontColor, setFontColor] = useState<string>("#dc2626");
 
-  // 넘버링 위치 및 배경 박스 목록
+  // 넘버링 위치 목록
   const [positions, setPositions] = useState<NumberPosition[]>([
     {
       id: "pos-1",
       name: "번호 1",
       xMm: 15,
       yMm: 15,
-      widthMm: 30,
-      heightMm: 10,
+      widthMm: 28,
+      heightMm: 9,
       hasBg: false,
       bgColor: "#ffffff",
       bgOpacity: 80,
@@ -68,6 +70,11 @@ export default function PdfNumberingPage() {
     },
   ]);
   const [activePosId, setActivePosId] = useState<string>("pos-1");
+
+  // 조판 (Cut & Stack) 전용 설정
+  const [sheetPaper, setSheetPaper] = useState<"A4" | "A3">("A4");
+  const [cropMarks, setCropMarks] = useState<boolean>(true);
+  const [previewSheetIdx, setPreviewSheetIdx] = useState<number>(0);
 
   // 히스토리 (Ctrl+Z 실행 취소 / Ctrl+Y 다시 실행)
   const [history, setHistory] = useState<HistorySnapshot[]>([]);
@@ -79,11 +86,8 @@ export default function PdfNumberingPage() {
   const [interactionMode, setInteractionMode] = useState<"idle" | "move" | "resize">("idle");
   const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState<boolean>(false);
-
-  // 드래그 플래그 (드래그 직후 캔버스 클릭 이벤트 오동작 방지)
   const isDraggingFlag = useRef<boolean>(false);
 
-  // 드래그 시작 시점의 스냅샷 정보
   const dragStartInfo = useRef<{
     startX: number;
     startY: number;
@@ -96,7 +100,25 @@ export default function PdfNumberingPage() {
 
   const totalQuantity = Math.max(0, Math.floor((endNum - startNum) / (step || 1)) + 1);
 
-  // 화면 컨테이너 폭 실시간 측정 (화면 배율 동기화용)
+  // --- 조판 (Cut & Stack) 규격 및 그리드 자동 연산 ---
+  const sheetDimensions = useMemo(() => {
+    if (sheetPaper === "A4") return { wMm: 210, hMm: 297 };
+    return { wMm: 297, hMm: 420 };
+  }, [sheetPaper]);
+
+  const impositionConfig = useMemo(() => {
+    if (!pageWidthMm || !pageHeightMm) return { cols: 2, rows: 5, slotsPerSheet: 10, totalSheets: 100 };
+    
+    // 용지 안에 최대로 안착할 수 있는 열과 행 계산
+    const cols = Math.max(1, Math.floor(sheetDimensions.wMm / pageWidthMm));
+    const rows = Math.max(1, Math.floor(sheetDimensions.hMm / pageHeightMm));
+    const slotsPerSheet = cols * rows;
+    const totalSheets = Math.ceil(totalQuantity / slotsPerSheet);
+
+    return { cols, rows, slotsPerSheet, totalSheets };
+  }, [pageWidthMm, pageHeightMm, sheetDimensions, totalQuantity]);
+
+  // 화면 컨테이너 폭 실시간 측정
   useEffect(() => {
     if (!editorContainerRef.current) return;
     const updateWidth = () => {
@@ -110,7 +132,6 @@ export default function PdfNumberingPage() {
     return () => ro.disconnect();
   }, [previewImgUrl]);
 
-  // 화면 확대 배율: 화면 픽셀 폭 / PDF 포인트 폭
   const screenScale = pageWidthPt > 0 ? containerWidthPx / pageWidthPt : 1;
 
   const formatNumber = (num: number) => {
@@ -129,7 +150,7 @@ export default function PdfNumberingPage() {
     return { r, g, b };
   };
 
-  // --- 히스토리 스택 관리 (Undo / Redo) ---
+  // --- 히스토리 스택 관리 ---
   const saveSnapshot = useCallback(
     (customPositions?: NumberPosition[], customFontSize?: number, customActiveId?: string) => {
       const snap: HistorySnapshot = {
@@ -167,7 +188,6 @@ export default function PdfNumberingPage() {
     setHistoryIndex((prev) => prev + 1);
   }, [history, historyIndex]);
 
-  // 키보드 단축키
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Shift") setIsShiftPressed(true);
@@ -196,7 +216,7 @@ export default function PdfNumberingPage() {
     };
   }, [undo, redo]);
 
-  // PDF 업로드 및 CMap 폰트 패키지 기반 무손실 렌더링
+  // PDF 업로드 및 CMap 폰트 연동
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | FileList) => {
     let file: File | null = null;
     if (e instanceof FileList) file = e[0];
@@ -215,17 +235,15 @@ export default function PdfNumberingPage() {
         const buffer = ev.target?.result as ArrayBuffer;
         setFileBuffer(buffer);
 
-        // ⭐ CMap 및 표준 폰트 라이브러리 연동으로 한글/특수 폰트 100% 정상 렌더링
         const pdf = await pdfjsLib.getDocument({
           data: buffer.slice(0),
           cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/cmaps/`,
           cMapPacked: true,
           standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/standard_fonts/`,
         }).promise;
-        setPageCount(pdf.numPages);
 
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 2.0 }); // 2.0x 고해상도 미리보기
+        const viewport = page.getViewport({ scale: 2.0 });
         const unscaledViewport = page.getViewport({ scale: 1.0 });
 
         const widthPt = unscaledViewport.width;
@@ -244,8 +262,8 @@ export default function PdfNumberingPage() {
             name: "번호 1",
             xMm: Math.max(5, Math.round(widthMm * 0.65)),
             yMm: Math.max(5, Math.round(heightMm * 0.6)),
-            widthMm: 24,
-            heightMm: 8,
+            widthMm: Math.min(widthMm * 0.35, 25),
+            heightMm: Math.min(heightMm * 0.25, 8),
             hasBg: false,
             bgColor: "#ffffff",
             bgOpacity: 85,
@@ -254,6 +272,7 @@ export default function PdfNumberingPage() {
         ];
         setPositions(initialPositions);
         setActivePosId("pos-1");
+        setPreviewSheetIdx(0);
 
         setHistory([{ positions: initialPositions, activePosId: "pos-1", fontSize: 14 }]);
         setHistoryIndex(0);
@@ -279,13 +298,13 @@ export default function PdfNumberingPage() {
   const resetFile = () => {
     setFileName(null);
     setFileBuffer(null);
-    setPageCount(0);
     setPageWidthMm(0);
     setPageHeightMm(0);
     setPreviewImgUrl(null);
     setProgress(null);
     setHistory([]);
     setHistoryIndex(-1);
+    setPreviewSheetIdx(0);
     const fileInput = document.getElementById("num-file-input") as HTMLInputElement;
     if (fileInput) fileInput.value = "";
   };
@@ -335,7 +354,7 @@ export default function PdfNumberingPage() {
     saveSnapshot(next, undefined, nextActive);
   };
 
-  // --- 마우스 인터랙션 (박스 이동 & 박스 크기 리사이징) ---
+  // --- 마우스 인터랙션 ---
   const handleStartMove = (e: React.MouseEvent, posId: string) => {
     e.stopPropagation();
     e.preventDefault();
@@ -376,7 +395,6 @@ export default function PdfNumberingPage() {
       const deltaScreenX = e.clientX - dragStartInfo.current.startX;
       const deltaScreenY = e.clientY - dragStartInfo.current.startY;
 
-      // 3픽셀 이상 움직였으면 확실한 드래그로 판정
       if (Math.abs(deltaScreenX) > 2 || Math.abs(deltaScreenY) > 2) {
         isDraggingFlag.current = true;
       }
@@ -387,7 +405,6 @@ export default function PdfNumberingPage() {
       const init = dragStartInfo.current.initialPos;
 
       if (interactionMode === "move") {
-        // ⭐ 박스가 페이지 바깥으로 나가지 않도록 완벽 가두기 (0 ~ pageWidthMm - widthMm)
         const maxX = Math.max(0, pageWidthMm - init.widthMm);
         const maxY = Math.max(0, pageHeightMm - init.heightMm);
         const newX = Math.max(0, Math.min(maxX, init.xMm + deltaXMm));
@@ -401,7 +418,6 @@ export default function PdfNumberingPage() {
           )
         );
       } else if (interactionMode === "resize") {
-        // 배경 박스 너비/높이만 조절 (글자 크기는 불변)
         let newWidth = init.widthMm;
         let newHeight = init.heightMm;
 
@@ -419,7 +435,6 @@ export default function PdfNumberingPage() {
           newHeight = init.heightMm - deltaYMm;
         }
 
-        // Shift 키: 종횡비 고정
         if (e.shiftKey) {
           const ratio = init.widthMm / (init.heightMm || 1);
           const maxDelta = Math.max(Math.abs(deltaXMm), Math.abs(deltaYMm));
@@ -446,7 +461,6 @@ export default function PdfNumberingPage() {
         dragStartInfo.current = null;
         saveSnapshot();
 
-        // 약간의 딜레이 후 드래그 플래그 해제 (click 이벤트 방지)
         setTimeout(() => {
           isDraggingFlag.current = false;
         }, 80);
@@ -463,7 +477,6 @@ export default function PdfNumberingPage() {
     };
   }, [interactionMode, activeHandle, pageWidthMm, pageHeightMm, saveSnapshot]);
 
-  // 마우스 휠 스크롤로 글자 크기(Font Size) 독립 조절
   const handleBoxWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -471,7 +484,6 @@ export default function PdfNumberingPage() {
     setFontSize((prev) => Math.max(6, Math.min(72, prev + delta)));
   };
 
-  // 배경 캔버스 클릭 시 이동 (드래그 직후에는 무시)
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isDraggingFlag.current) return;
     if (!activePos || !editorContainerRef.current || !pageWidthMm || !pageHeightMm) return;
@@ -480,7 +492,6 @@ export default function PdfNumberingPage() {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // 클릭 지점이 박스의 중심이 되도록 배치
     const targetXMm = (clickX / rect.width) * pageWidthMm - activePos.widthMm / 2;
     const targetYMm = (clickY / rect.height) * pageHeightMm - activePos.heightMm / 2;
 
@@ -492,12 +503,13 @@ export default function PdfNumberingPage() {
     updateActivePos({ xMm: newXMm, yMm: newYMm });
   };
 
-  // PDF 생성 엔진 (화면과 1:1 완벽 일치 + 초경량 템플릿 대량 생성)
+  // --- PDF 생성 및 다운로드 (단일 매수 출력 or Cut & Stack 인쇄 조판) ---
   const handleGeneratePdf = async () => {
     if (!fileBuffer || totalQuantity <= 0) return;
 
     setIsGenerating(true);
-    setProgress({ current: 0, total: totalQuantity });
+    const targetTotal = outputMode === "single" ? totalQuantity : impositionConfig.totalSheets;
+    setProgress({ current: 0, total: targetTotal });
 
     try {
       await new Promise((r) => setTimeout(r, 40));
@@ -506,9 +518,7 @@ export default function PdfNumberingPage() {
       const outputDoc = await PDFDocument.create();
 
       const srcPage = srcDoc.getPages()[0];
-      const { width: actualPtW, height: actualPtH } = srcPage.getSize();
-
-      // 원본 양식 XObject 템플릿 임베딩 (메모리 절약)
+      const { width: itemPtW, height: itemPtH } = srcPage.getSize();
       const [embeddedTemplate] = await outputDoc.embedPages([srcPage]);
 
       let embeddedFont = await outputDoc.embedFont(StandardFonts.CourierBold);
@@ -519,67 +529,159 @@ export default function PdfNumberingPage() {
       }
 
       const fontRgb = hexToRgb(fontColor);
+      const MM_TO_PT = 2.83465;
 
-      const numbers: number[] = [];
-      for (let n = startNum; n <= endNum; n += step) {
-        numbers.push(n);
-      }
+      if (outputMode === "single") {
+        // [단일 매수 출력]: 1장씩 낱장 PDF 생성
+        const numbers: number[] = [];
+        for (let n = startNum; n <= endNum; n += step) {
+          numbers.push(n);
+        }
 
-      for (let i = 0; i < numbers.length; i++) {
-        const currentNum = numbers[i];
-        const formattedText = formatNumber(currentNum);
+        for (let i = 0; i < numbers.length; i++) {
+          const currentNum = numbers[i];
+          const formattedText = formatNumber(currentNum);
 
-        const page = outputDoc.addPage([actualPtW, actualPtH]);
-        page.drawPage(embeddedTemplate, {
-          x: 0,
-          y: 0,
-          width: actualPtW,
-          height: actualPtH,
-        });
+          const page = outputDoc.addPage([itemPtW, itemPtH]);
+          page.drawPage(embeddedTemplate, { x: 0, y: 0, width: itemPtW, height: itemPtH });
 
-        for (const pos of positions) {
-          // mm -> pt 환산 (실제 PDF 크기 기준 비율 적용)
-          const boxXPt = (pos.xMm / pageWidthMm) * actualPtW;
-          const boxYFromTopPt = (pos.yMm / pageHeightMm) * actualPtH;
-          const boxWPt = (pos.widthMm / pageWidthMm) * actualPtW;
-          const boxHPt = (pos.heightMm / pageHeightMm) * actualPtH;
+          for (const pos of positions) {
+            const boxXPt = (pos.xMm / pageWidthMm) * itemPtW;
+            const boxYFromTopPt = (pos.yMm / pageHeightMm) * itemPtH;
+            const boxWPt = (pos.widthMm / pageWidthMm) * itemPtW;
+            const boxHPt = (pos.heightMm / pageHeightMm) * itemPtH;
+            const boxYPt = itemPtH - boxYFromTopPt - boxHPt;
 
-          // PDF 좌표계 (좌측 하단 원점)
-          const boxYPt = actualPtH - boxYFromTopPt - boxHPt;
+            if (pos.hasBg && pos.bgOpacity > 0) {
+              const bgRgb = hexToRgb(pos.bgColor);
+              page.drawRectangle({
+                x: boxXPt,
+                y: boxYPt,
+                width: boxWPt,
+                height: boxHPt,
+                color: rgb(bgRgb.r, bgRgb.g, bgRgb.b),
+                opacity: pos.bgOpacity / 100,
+              });
+            }
 
-          // 1. 배경 박스 렌더링
-          if (pos.hasBg && pos.bgOpacity > 0) {
-            const bgRgb = hexToRgb(pos.bgColor);
-            page.drawRectangle({
-              x: boxXPt,
-              y: boxYPt,
-              width: boxWPt,
-              height: boxHPt,
-              color: rgb(bgRgb.r, bgRgb.g, bgRgb.b),
-              opacity: pos.bgOpacity / 100,
+            const textW = embeddedFont.widthOfTextAtSize(formattedText, fontSize);
+            const textH = embeddedFont.heightAtSize(fontSize);
+            const textX = boxXPt + (boxWPt - textW) / 2;
+            const textY = boxYPt + (boxHPt / 2) - (textH * 0.33);
+
+            page.drawText(formattedText, {
+              x: textX,
+              y: textY,
+              size: fontSize,
+              font: embeddedFont,
+              color: rgb(fontRgb.r, fontRgb.g, fontRgb.b),
             });
           }
 
-          // 2. 숫자 텍스트 (박스 정중앙 정밀 안착)
-          const textW = embeddedFont.widthOfTextAtSize(formattedText, fontSize);
-          const textH = embeddedFont.heightAtSize(fontSize);
-
-          const textX = boxXPt + (boxWPt - textW) / 2;
-          // 베이스라인은 글자 시각 중심보다 약 0.33 * textH 아래에 위치
-          const textY = boxYPt + (boxHPt / 2) - (textH * 0.33);
-
-          page.drawText(formattedText, {
-            x: textX,
-            y: textY,
-            size: fontSize,
-            font: embeddedFont,
-            color: rgb(fontRgb.r, fontRgb.g, fontRgb.b),
-          });
+          if (i % 50 === 0 || i === numbers.length - 1) {
+            setProgress({ current: i + 1, total: numbers.length });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
         }
+      } else {
+        // [인쇄 조판 (Cut & Stack)]: A4/A3 전지에 10장씩 안착 및 겹침 재단 순서 자동 연산
+        const sheetPtW = sheetDimensions.wMm * MM_TO_PT;
+        const sheetPtH = sheetDimensions.hMm * MM_TO_PT;
+        const { cols, rows, totalSheets } = impositionConfig;
 
-        if (i % 50 === 0 || i === numbers.length - 1) {
-          setProgress({ current: i + 1, total: numbers.length });
-          await new Promise((resolve) => setTimeout(resolve, 0));
+        // 용지 중앙 정렬 여백
+        const totalGridWPt = cols * itemPtW;
+        const totalGridHPt = rows * itemPtH;
+        const offsetPtX = (sheetPtW - totalGridWPt) / 2;
+        const offsetPtY = (sheetPtH - totalGridHPt) / 2;
+
+        const markColor = rgb(0.2, 0.2, 0.2);
+
+        for (let s = 0; s < totalSheets; s++) {
+          const page = outputDoc.addPage([sheetPtW, sheetPtH]);
+
+          for (let c = 0; c < cols; c++) {
+            for (let r = 0; r < rows; r++) {
+              // Cut & Stack 공식: 1번째 열 아래로 0~4번 슬롯, 2번째 열 아래로 5~9번 슬롯
+              const slotIdx = c * rows + r;
+              const slotNum = startNum + (slotIdx * totalSheets) + (s * step);
+
+              // 슬롯의 전지 상 위치 (상단 기준)
+              const slotXPt = offsetPtX + c * itemPtW;
+              const slotYPt = sheetPtH - offsetPtY - (r + 1) * itemPtH;
+
+              // 원본 템플릿 드로우
+              page.drawPage(embeddedTemplate, {
+                x: slotXPt,
+                y: slotYPt,
+                width: itemPtW,
+                height: itemPtH,
+              });
+
+              // 끝 번호를 넘지 않는 경우에만 번호 인쇄
+              if (slotNum <= endNum) {
+                const formattedText = formatNumber(slotNum);
+
+                for (const pos of positions) {
+                  const boxXPt = slotXPt + (pos.xMm / pageWidthMm) * itemPtW;
+                  const boxYFromTopPt = (pos.yMm / pageHeightMm) * itemPtH;
+                  const boxWPt = (pos.widthMm / pageWidthMm) * itemPtW;
+                  const boxHPt = (pos.heightMm / pageHeightMm) * itemPtH;
+                  const boxYPt = (slotYPt + itemPtH) - boxYFromTopPt - boxHPt;
+
+                  if (pos.hasBg && pos.bgOpacity > 0) {
+                    const bgRgb = hexToRgb(pos.bgColor);
+                    page.drawRectangle({
+                      x: boxXPt,
+                      y: boxYPt,
+                      width: boxWPt,
+                      height: boxHPt,
+                      color: rgb(bgRgb.r, bgRgb.g, bgRgb.b),
+                      opacity: pos.bgOpacity / 100,
+                    });
+                  }
+
+                  const textW = embeddedFont.widthOfTextAtSize(formattedText, fontSize);
+                  const textH = embeddedFont.heightAtSize(fontSize);
+                  const textX = boxXPt + (boxWPt - textW) / 2;
+                  const textY = boxYPt + (boxHPt / 2) - (textH * 0.33);
+
+                  page.drawText(formattedText, {
+                    x: textX,
+                    y: textY,
+                    size: fontSize,
+                    font: embeddedFont,
+                    color: rgb(fontRgb.r, fontRgb.g, fontRgb.b),
+                  });
+                }
+              }
+            }
+          }
+
+          // 재단선(Crop Marks) 드로우
+          if (cropMarks) {
+            const markLen = 5 * MM_TO_PT;
+            const drawL = (x1: number, y1: number, x2: number, y2: number) =>
+              page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.4, color: markColor });
+
+            // 수직선 재단표시 (상단 / 하단)
+            for (let c = 0; c <= cols; c++) {
+              const cx = offsetPtX + c * itemPtW;
+              drawL(cx, sheetPtH - offsetPtY, cx, sheetPtH - offsetPtY + markLen);
+              drawL(cx, offsetPtY, cx, offsetPtY - markLen);
+            }
+            // 수평선 재단표시 (좌측 / 우측)
+            for (let r = 0; r <= rows; r++) {
+              const cy = sheetPtH - offsetPtY - r * itemPtH;
+              drawL(offsetPtX, cy, offsetPtX - markLen, cy);
+              drawL(offsetPtX + totalGridWPt, cy, offsetPtX + totalGridWPt + markLen, cy);
+            }
+          }
+
+          if (s % 10 === 0 || s === totalSheets - 1) {
+            setProgress({ current: s + 1, total: totalSheets });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
         }
       }
 
@@ -589,7 +691,8 @@ export default function PdfNumberingPage() {
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       const cleanName = (fileName || "원고").replace(/\.[^/.]+$/, "");
-      link.download = `${cleanName}_넘버링_${formatNumber(startNum)}~${formatNumber(endNum)}.pdf`;
+      const modeSuffix = outputMode === "single" ? `_단일_${formatNumber(startNum)}~${formatNumber(endNum)}` : `_조판_Cut&Stack_${sheetPaper}_${impositionConfig.totalSheets}장`;
+      link.download = `${cleanName}${modeSuffix}.pdf`;
       link.click();
     } catch (err) {
       console.error(err);
@@ -610,15 +713,42 @@ export default function PdfNumberingPage() {
               유틸리티 / 08
             </span>
             <span className="text-xs font-bold text-[#666666] dark:text-[#A0A0A0] tracking-widest">
-              PDF 편집 및 변환
+              PDF 편집 및 조판
             </span>
           </div>
           <h1 className="text-4xl font-black text-[#222222] dark:text-[#EAEAEA] tracking-tight">
-            PDF 일련번호(넘버링) 생성기
+            PDF 일련번호 & 조판 (Cut & Stack)
           </h1>
           <p className="mt-2 text-sm font-bold text-[#666666] dark:text-[#A0A0A0]">
-            원본 양식에 번호 박스를 지정하여 일련번호가 매겨진 인쇄용 PDF를 생성합니다.
+            마우스로 번호 위치를 잡고, 재단 후 손으로 분류할 필요 없이 바로 포개지는 인쇄용 하리꼬미를 생성합니다.
           </p>
+        </div>
+
+        {/* 상단 모드 전환 탭 */}
+        <div className="flex border-2 border-[#222222] dark:border-[#444444] bg-white dark:bg-[#1E1E1E] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111] overflow-hidden">
+          <button
+            onClick={() => setOutputMode("single")}
+            className={`px-5 py-2.5 font-bold text-sm border-r-2 border-[#222222] dark:border-[#444444] transition-colors flex items-center gap-2 ${
+              outputMode === "single"
+                ? "bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]"
+                : "text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">format_list_numbered</span>
+            단일 매수 출력
+          </button>
+          <button
+            onClick={() => setOutputMode("stack")}
+            className={`px-5 py-2.5 font-bold text-sm transition-colors flex items-center gap-2 ${
+              outputMode === "stack"
+                ? "bg-[#222222] text-[#F5F4F0] dark:bg-[#EAEAEA] dark:text-[#121212]"
+                : "text-[#666666] dark:text-[#A0A0A0] hover:bg-[#F5F4F0] dark:hover:bg-[#2A2A2A]"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">layers</span>
+            인쇄 조판 (Cut & Stack)
+            <span className="bg-red-500 text-white text-[10px] px-1 py-0.2 rounded-xs font-black">추천</span>
+          </button>
         </div>
       </header>
 
@@ -669,6 +799,84 @@ export default function PdfNumberingPage() {
             )}
           </div>
 
+          {/* Cut & Stack 조판 모드일 때 전용 인쇄 설정 카드 */}
+          {outputMode === "stack" && (
+            <div className="bg-blue-50 dark:bg-[#1A233A] border-2 border-blue-300 dark:border-blue-700 shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111]">
+              <div className="bg-blue-100 dark:bg-[#202E4E] px-5 py-3 border-b-2 border-blue-300 dark:border-blue-700 flex items-center justify-between">
+                <div className="font-black text-blue-950 dark:text-blue-100 text-sm flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">content_cut</span>
+                  재단 적층 (Cut & Stack) 설정
+                </div>
+                <span className="text-[11px] font-mono font-bold bg-blue-600 text-white px-2 py-0.5">
+                  1판 {impositionConfig.slotsPerSheet}개 안착
+                </span>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-blue-900 dark:text-blue-200 mb-1">
+                      인쇄 용지 규격
+                    </label>
+                    <select
+                      value={sheetPaper}
+                      onChange={(e) => setSheetPaper(e.target.value as any)}
+                      className="w-full bg-white dark:bg-[#121212] border-2 border-blue-200 dark:border-blue-700 px-3 py-2 text-xs font-bold outline-none cursor-pointer"
+                    >
+                      <option value="A4">A4 (210 × 297 mm)</option>
+                      <option value="A3">A3 (297 × 420 mm)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-blue-900 dark:text-blue-200 mb-1">
+                      재단선 표시 (Crop Mark)
+                    </label>
+                    <button
+                      onClick={() => setCropMarks(!cropMarks)}
+                      className={`w-full py-2 text-xs font-bold border-2 transition-colors flex items-center justify-center gap-1.5 ${
+                        cropMarks
+                          ? "bg-blue-600 text-white border-blue-700 font-black"
+                          : "bg-white text-gray-500 border-blue-200"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">
+                        {cropMarks ? "check_circle" : "cancel"}
+                      </span>
+                      {cropMarks ? "재단선 ON" : "재단선 OFF"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 적층 원리 안내 다이어그램 */}
+                <div className="border border-blue-200 dark:border-blue-800 bg-white/80 dark:bg-[#121212]/80 p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-black text-blue-950 dark:text-blue-100">
+                    <span>1번째 인쇄 장 배열 예시</span>
+                    <span className="text-blue-600 font-mono">
+                      총 {impositionConfig.totalSheets}장 출력
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 font-mono text-[11px] text-center font-bold">
+                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
+                      1번 (좌상)
+                    </div>
+                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
+                      {1 + impositionConfig.rows * impositionConfig.totalSheets}번 (우상)
+                    </div>
+                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
+                      {1 + 1 * impositionConfig.totalSheets}번
+                    </div>
+                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
+                      {1 + (impositionConfig.rows + 1) * impositionConfig.totalSheets}번
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-blue-800 dark:text-blue-300 font-bold leading-tight pt-1">
+                    ✓ 출력된 {impositionConfig.totalSheets}장을 그대로 겹쳐서 재단하면, 수작업 분류 없이 1번부터 {endNum}번까지 순서대로 바로 포개집니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 2. 번호 박스 위치 & 크기 관리 */}
           <div className="bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[4px_4px_0px_#222222] dark:shadow-[4px_4px_0px_#111111]">
             <div className="bg-[#F5F4F0] dark:bg-[#2A2A2A] px-5 py-3 border-b-2 border-[#222222] dark:border-[#444444] flex items-center justify-between">
@@ -686,7 +894,6 @@ export default function PdfNumberingPage() {
             </div>
 
             <div className="p-5 space-y-4">
-              {/* 위치 선택 탭 */}
               <div className="flex flex-wrap gap-2">
                 {positions.map((pos) => {
                   const isActive = pos.id === activePosId;
@@ -718,7 +925,6 @@ export default function PdfNumberingPage() {
                 })}
               </div>
 
-              {/* 좌표 및 박스 크기 수치 직접 입력 */}
               {activePos && (
                 <div className="space-y-3 pt-2 border-t border-[#E5E4E0] dark:border-[#333333]">
                   <div className="grid grid-cols-2 gap-3">
@@ -985,10 +1191,12 @@ export default function PdfNumberingPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                    총 생성 수량
+                    {outputMode === "single" ? "총 출력 매수" : "총 필요 전지"}
                   </p>
                   <p className="text-sm font-black text-blue-900 dark:text-blue-100 mt-0.5">
-                    {totalQuantity.toLocaleString()} 장
+                    {outputMode === "single"
+                      ? `${totalQuantity.toLocaleString()} 장`
+                      : `${sheetPaper} ${impositionConfig.totalSheets.toLocaleString()} 장`}
                   </p>
                 </div>
               </div>
@@ -1091,160 +1299,272 @@ export default function PdfNumberingPage() {
             ) : (
               <>
                 <span className="material-symbols-outlined text-[24px]">download</span>
-                일련번호 PDF 생성 ({totalQuantity.toLocaleString()}장)
+                {outputMode === "single"
+                  ? `일련번호 PDF 생성 (${totalQuantity.toLocaleString()}장)`
+                  : `Cut & Stack 조판 PDF 생성 (${impositionConfig.totalSheets.toLocaleString()}장)`}
               </>
             )}
           </button>
         </div>
 
-        {/* 우측: 시각적 인터랙티브 에디터 */}
-        <div className="lg:col-span-7 xl:col-span-8 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] flex flex-col h-[820px] overflow-hidden">
+        {/* 우측: 시각적 인터랙티브 에디터 및 조판 미리보기 */}
+        <div className="lg:col-span-7 xl:col-span-8 bg-white dark:bg-[#1E1E1E] border-2 border-[#222222] dark:border-[#444444] shadow-[8px_8px_0px_#222222] dark:shadow-[8px_8px_0px_#111111] flex flex-col h-[840px] overflow-hidden">
           {/* 상단 툴바 */}
           <div className="bg-[#222222] dark:bg-[#111111] px-5 py-3.5 flex items-center justify-between border-b-2 border-[#222222] dark:border-[#444444] shrink-0 text-[#F5F4F0]">
             <div className="flex items-center gap-3">
               <span className="text-xs font-black tracking-widest uppercase flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[18px]">touch_app</span>
-                비주얼 에디터
+                <span className="material-symbols-outlined text-[18px]">
+                  {outputMode === "single" ? "touch_app" : "grid_view"}
+                </span>
+                {outputMode === "single" ? "원고 넘버링 에디터" : "Cut & Stack 조판 시트 미리보기"}
               </span>
               {pageWidthMm > 0 && (
                 <span className="text-[11px] font-mono text-[#A0A0A0] bg-[#333333] px-2.5 py-0.5 border border-[#444444]">
-                  {pageWidthMm} × {pageHeightMm} mm
+                  {outputMode === "single"
+                    ? `${pageWidthMm} × ${pageHeightMm} mm`
+                    : `${sheetPaper} (${sheetDimensions.wMm}×${sheetDimensions.hMm}mm) • ${impositionConfig.cols}×${impositionConfig.rows} 안착`}
                 </span>
               )}
             </div>
 
-            {/* 히스토리 조작 툴바 (Undo / Redo / Shift 뱃지) */}
-            <div className="flex items-center gap-2">
-              {isShiftPressed && (
-                <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5">
-                  Shift: 비율 고정
-                </span>
-              )}
-
-              <div className="flex items-center border border-[#444444] bg-[#2A2A2A]">
+            {/* 조판 모드 시트 넘김 네비게이션 */}
+            {outputMode === "stack" && fileBuffer && (
+              <div className="flex items-center gap-3 bg-[#2A2A2A] px-3 py-1 border border-[#444444]">
                 <button
-                  onClick={undo}
-                  disabled={historyIndex <= 0}
-                  className="p-1.5 text-[#A0A0A0] hover:text-white disabled:opacity-30 disabled:hover:text-[#A0A0A0] transition-colors flex items-center"
-                  title="실행 취소 (Ctrl+Z)"
+                  onClick={() => setPreviewSheetIdx((prev) => Math.max(0, prev - 1))}
+                  disabled={previewSheetIdx === 0}
+                  className="hover:text-white disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm"
                 >
-                  <span className="material-symbols-outlined text-[18px]">undo</span>
+                  &lt;
                 </button>
-                <div className="w-[1px] h-4 bg-[#444444]" />
+                <span className="text-xs font-mono font-bold tracking-widest">
+                  Sheet {previewSheetIdx + 1} / {impositionConfig.totalSheets}
+                </span>
                 <button
-                  onClick={redo}
-                  disabled={historyIndex >= history.length - 1}
-                  className="p-1.5 text-[#A0A0A0] hover:text-white disabled:opacity-30 disabled:hover:text-[#A0A0A0] transition-colors flex items-center"
-                  title="다시 실행 (Ctrl+Y)"
+                  onClick={() =>
+                    setPreviewSheetIdx((prev) => Math.min(impositionConfig.totalSheets - 1, prev + 1))
+                  }
+                  disabled={previewSheetIdx >= impositionConfig.totalSheets - 1}
+                  className="hover:text-white disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm"
                 >
-                  <span className="material-symbols-outlined text-[18px]">redo</span>
+                  &gt;
                 </button>
               </div>
-            </div>
+            )}
+
+            {/* 단일 모드 히스토리 조작 툴바 */}
+            {outputMode === "single" && (
+              <div className="flex items-center gap-2">
+                {isShiftPressed && (
+                  <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5">
+                    Shift: 비율 고정
+                  </span>
+                )}
+                <div className="flex items-center border border-[#444444] bg-[#2A2A2A]">
+                  <button
+                    onClick={undo}
+                    disabled={historyIndex <= 0}
+                    className="p-1.5 text-[#A0A0A0] hover:text-white disabled:opacity-30 disabled:hover:text-[#A0A0A0] transition-colors flex items-center"
+                    title="실행 취소 (Ctrl+Z)"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">undo</span>
+                  </button>
+                  <div className="w-[1px] h-4 bg-[#444444]" />
+                  <button
+                    onClick={redo}
+                    disabled={historyIndex >= history.length - 1}
+                    className="p-1.5 text-[#A0A0A0] hover:text-white disabled:opacity-30 disabled:hover:text-[#A0A0A0] transition-colors flex items-center"
+                    title="다시 실행 (Ctrl+Y)"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">redo</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 에디터 작업대 */}
           <div className="flex-1 bg-[#2A2A2A] relative overflow-auto p-6 flex items-center justify-center select-none">
             {previewImgUrl ? (
-              <div
-                ref={editorContainerRef}
-                onClick={handleCanvasClick}
-                className="relative shadow-[0_12px_28px_rgba(0,0,0,0.7)] cursor-crosshair select-none bg-white"
-                style={{
-                  width: "100%",
-                  maxWidth: "680px",
-                  aspectRatio: `${pageWidthMm} / ${pageHeightMm}`,
-                }}
-              >
-                {/* 배경: PDF 첫 페이지 이미지 (CMap 연동으로 한글/특수 폰트 완벽 복원) */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewImgUrl}
-                  alt="PDF Page Preview"
-                  className="w-full h-full object-contain pointer-events-none"
-                />
+              outputMode === "single" ? (
+                /* [단일 모드]: 원본 위에 마우스로 위치 잡는 인터랙티브 에디터 */
+                <div
+                  ref={editorContainerRef}
+                  onClick={handleCanvasClick}
+                  className="relative shadow-[0_12px_28px_rgba(0,0,0,0.7)] cursor-crosshair select-none bg-white"
+                  style={{
+                    width: "100%",
+                    maxWidth: "680px",
+                    aspectRatio: `${pageWidthMm} / ${pageHeightMm}`,
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewImgUrl}
+                    alt="PDF Page Preview"
+                    className="w-full h-full object-contain pointer-events-none"
+                  />
 
-                {/* 넘버링 위치 및 배경 박스들 오버레이 */}
-                {positions.map((pos) => {
-                  const isActive = pos.id === activePosId;
-                  const leftPercent = (pos.xMm / pageWidthMm) * 100;
-                  const topPercent = (pos.yMm / pageHeightMm) * 100;
-                  const widthPercent = (pos.widthMm / pageWidthMm) * 100;
-                  const heightPercent = (pos.heightMm / pageHeightMm) * 100;
+                  {positions.map((pos) => {
+                    const isActive = pos.id === activePosId;
+                    const leftPercent = (pos.xMm / pageWidthMm) * 100;
+                    const topPercent = (pos.yMm / pageHeightMm) * 100;
+                    const widthPercent = (pos.widthMm / pageWidthMm) * 100;
+                    const heightPercent = (pos.heightMm / pageHeightMm) * 100;
+                    const renderedFontSizePx = Math.max(6, fontSize * screenScale);
 
-                  // ⭐ 화면 확대 배율을 정확히 적용한 폰트 렌더링 픽셀 크기
-                  const renderedFontSizePx = Math.max(6, fontSize * screenScale);
-
-                  return (
-                    <div
-                      key={pos.id}
-                      onMouseDown={(e) => handleStartMove(e, pos.id)}
-                      onWheel={handleBoxWheel}
-                      className={`absolute group cursor-move select-none transition-shadow flex items-center justify-center ${
-                        isActive
-                          ? "ring-2 ring-blue-600 shadow-[0_0_16px_rgba(37,99,235,0.4)] z-30"
-                          : "border border-dashed border-gray-400 opacity-80 hover:opacity-100 z-20"
-                      }`}
-                      style={{
-                        left: `${leftPercent}%`,
-                        top: `${topPercent}%`,
-                        width: `${widthPercent}%`,
-                        height: `${heightPercent}%`,
-                        backgroundColor: pos.hasBg ? pos.bgColor : "transparent",
-                        opacity: pos.hasBg ? pos.bgOpacity / 100 : 1,
-                        borderRadius: `${pos.borderRadiusMm}mm`,
-                      }}
-                    >
-                      {/* 실제 텍스트 내용 (화면 배율이 적용되어 실제 PDF와 1:1 완벽 일치) */}
-                      <div className="flex items-center justify-center w-full h-full pointer-events-none overflow-hidden px-0.5">
-                        <span
-                          className="font-black leading-none whitespace-nowrap"
-                          style={{
-                            fontSize: `${renderedFontSizePx}px`,
-                            color: fontColor,
-                            fontFamily:
-                              fontFamily === "Courier"
-                                ? "monospace"
-                                : fontFamily === "Times"
-                                ? "serif"
-                                : "sans-serif",
-                          }}
-                        >
-                          {formatNumber(startNum)}
-                        </span>
-                      </div>
-
-                      {/* 활성 박스일 때 모서리 리사이즈 핸들 */}
-                      {isActive && (
-                        <>
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, "nw", pos.id)}
-                            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nwse-resize shadow-sm hover:scale-125 transition-transform"
-                            title="박스 크기 조절 (Shift: 비율 고정)"
-                          />
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, "ne", pos.id)}
-                            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
-                            title="박스 크기 조절 (Shift: 비율 고정)"
-                          />
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, "sw", pos.id)}
-                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
-                            title="박스 크기 조절 (Shift: 비율 고정)"
-                          />
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, "se", pos.id)}
-                            className="absolute -bottom-2 -right-2 w-3.5 h-3.5 bg-blue-600 border-2 border-white cursor-nwse-resize shadow-md hover:scale-125 transition-transform flex items-center justify-center"
-                            title="박스 크기 조절 (Shift: 비율 고정)"
+                    return (
+                      <div
+                        key={pos.id}
+                        onMouseDown={(e) => handleStartMove(e, pos.id)}
+                        onWheel={handleBoxWheel}
+                        className={`absolute group cursor-move select-none transition-shadow flex items-center justify-center ${
+                          isActive
+                            ? "ring-2 ring-blue-600 shadow-[0_0_16px_rgba(37,99,235,0.4)] z-30"
+                            : "border border-dashed border-gray-400 opacity-80 hover:opacity-100 z-20"
+                        }`}
+                        style={{
+                          left: `${leftPercent}%`,
+                          top: `${topPercent}%`,
+                          width: `${widthPercent}%`,
+                          height: `${heightPercent}%`,
+                          backgroundColor: pos.hasBg ? pos.bgColor : "transparent",
+                          opacity: pos.hasBg ? pos.bgOpacity / 100 : 1,
+                          borderRadius: `${pos.borderRadiusMm}mm`,
+                        }}
+                      >
+                        <div className="flex items-center justify-center w-full h-full pointer-events-none overflow-hidden px-0.5">
+                          <span
+                            className="font-black leading-none whitespace-nowrap"
+                            style={{
+                              fontSize: `${renderedFontSizePx}px`,
+                              color: fontColor,
+                              fontFamily:
+                                fontFamily === "Courier"
+                                  ? "monospace"
+                                  : fontFamily === "Times"
+                                  ? "serif"
+                                  : "sans-serif",
+                            }}
                           >
-                            <span className="w-1 h-1 bg-white rounded-full" />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                            {formatNumber(startNum)}
+                          </span>
+                        </div>
+
+                        {isActive && (
+                          <>
+                            <div
+                              onMouseDown={(e) => handleStartResize(e, "nw", pos.id)}
+                              className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nwse-resize shadow-sm hover:scale-125 transition-transform"
+                              title="박스 크기 조절 (Shift: 비율 고정)"
+                            />
+                            <div
+                              onMouseDown={(e) => handleStartResize(e, "ne", pos.id)}
+                              className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
+                              title="박스 크기 조절 (Shift: 비율 고정)"
+                            />
+                            <div
+                              onMouseDown={(e) => handleStartResize(e, "sw", pos.id)}
+                              className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-600 cursor-nesw-resize shadow-sm hover:scale-125 transition-transform"
+                              title="박스 크기 조절 (Shift: 비율 고정)"
+                            />
+                            <div
+                              onMouseDown={(e) => handleStartResize(e, "se", pos.id)}
+                              className="absolute -bottom-2 -right-2 w-3.5 h-3.5 bg-blue-600 border-2 border-white cursor-nwse-resize shadow-md hover:scale-125 transition-transform flex items-center justify-center"
+                              title="박스 크기 조절 (Shift: 비율 고정)"
+                            >
+                              <span className="w-1 h-1 bg-white rounded-full" />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* [조판 모드]: 전지(A4/A3) 상에 10장씩 앉혀진 Cut & Stack 실시간 렌더링 뷰어 */
+                <div
+                  className="relative shadow-[0_16px_36px_rgba(0,0,0,0.8)] bg-white border border-gray-400 select-none p-4 flex flex-col items-center justify-center"
+                  style={{
+                    height: "100%",
+                    maxHeight: "720px",
+                    aspectRatio: `${sheetDimensions.wMm} / ${sheetDimensions.hMm}`,
+                  }}
+                >
+                  {/* 전지 그리드 컨테이너 */}
+                  <div
+                    className="w-full h-full relative grid border border-dashed border-gray-400"
+                    style={{
+                      gridTemplateColumns: `repeat(${impositionConfig.cols}, minmax(0, 1fr))`,
+                      gridTemplateRows: `repeat(${impositionConfig.rows}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {Array.from({ length: impositionConfig.slotsPerSheet }).map((_, idx) => {
+                      const c = Math.floor(idx / impositionConfig.rows);
+                      const r = idx % impositionConfig.rows;
+                      const slotIdx = c * impositionConfig.rows + r;
+                      const slotNum =
+                        startNum + slotIdx * impositionConfig.totalSheets + previewSheetIdx * step;
+                      const isOver = slotNum > endNum;
+
+                      return (
+                        <div
+                          key={idx}
+                          className="relative border border-gray-300 overflow-hidden flex items-center justify-center bg-gray-50"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={previewImgUrl}
+                            alt="Slot Preview"
+                            className="w-full h-full object-contain pointer-events-none"
+                          />
+
+                          {/* 슬롯 상의 번호 오버레이 */}
+                          {!isOver &&
+                            positions.map((pos) => {
+                              const leftPercent = (pos.xMm / pageWidthMm) * 100;
+                              const topPercent = (pos.yMm / pageHeightMm) * 100;
+                              const widthPercent = (pos.widthMm / pageWidthMm) * 100;
+                              const heightPercent = (pos.heightMm / pageHeightMm) * 100;
+
+                              return (
+                                <div
+                                  key={pos.id}
+                                  className="absolute flex items-center justify-center"
+                                  style={{
+                                    left: `${leftPercent}%`,
+                                    top: `${topPercent}%`,
+                                    width: `${widthPercent}%`,
+                                    height: `${heightPercent}%`,
+                                    backgroundColor: pos.hasBg ? pos.bgColor : "transparent",
+                                    opacity: pos.hasBg ? pos.bgOpacity / 100 : 1,
+                                    borderRadius: `${pos.borderRadiusMm}mm`,
+                                  }}
+                                >
+                                  <span
+                                    className="font-black leading-none whitespace-nowrap"
+                                    style={{
+                                      fontSize: `${Math.max(6, fontSize * 0.45)}px`,
+                                      color: fontColor,
+                                      fontFamily:
+                                        fontFamily === "Courier"
+                                          ? "monospace"
+                                          : fontFamily === "Times"
+                                          ? "serif"
+                                          : "sans-serif",
+                                    }}
+                                  >
+                                    {formatNumber(slotNum)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
             ) : (
               <div className="text-center text-[#A0A0A0] dark:text-[#666666] pointer-events-none">
                 <span className="material-symbols-outlined text-6xl mb-3 opacity-40">
@@ -1254,46 +1574,35 @@ export default function PdfNumberingPage() {
                   양식 PDF 원고를 좌측에 업로드하면
                 </p>
                 <p className="text-xs text-[#888888] mt-1">
-                  이곳에 문서가 표시되며 마우스로 드래그하여 번호 위치와 크기를 조절할 수 있습니다.
+                  이곳에 문서가 표시되며 번호 위치 지정 및 Cut & Stack 조판 미리보기가 제공됩니다.
                 </p>
               </div>
             )}
           </div>
 
-          {/* 하단 단축키 안내 바 */}
+          {/* 하단 안내 바 */}
           <div className="bg-[#F5F4F0] dark:bg-[#1E1E1E] border-t-2 border-[#222222] dark:border-[#444444] px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-bold text-[#666666] dark:text-[#A0A0A0] shrink-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="flex items-center gap-1">
-                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
-                  마우스 드래그
-                </kbd>
-                위치 이동
-              </span>
-              <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
-              <span className="flex items-center gap-1">
-                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
-                  모서리 핸들
-                </kbd>
-                박스 크기 조절
-              </span>
-              <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
-              <span className="flex items-center gap-1">
-                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
-                  Shift
-                </kbd>
-                비율 고정
-              </span>
-              <span className="text-[#CCCCCC] dark:text-[#444444]">|</span>
-              <span className="flex items-center gap-1">
-                <kbd className="bg-white dark:bg-[#2A2A2A] border border-[#CCCCCC] dark:border-[#444444] px-1.5 py-0.5 rounded text-[10px] font-mono shadow-xs">
-                  Ctrl + Z
-                </kbd>
-                실행 취소
-              </span>
-            </div>
+            {outputMode === "single" ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span>마우스 드래그로 번호 위치 이동</span>
+                <span>•</span>
+                <span>모서리 핸들로 박스 크기 조절</span>
+                <span>•</span>
+                <span>Ctrl + Z 실행 취소</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 font-bold">
+                <span className="material-symbols-outlined text-[16px]">info</span>
+                <span>
+                  출력 후 100장을 겹쳐서 재단하면, 1번부터 1,000번까지 손으로 맞출 필요 없이 완벽하게 자동 정렬됩니다.
+                </span>
+              </div>
+            )}
             {fileBuffer && (
-              <span className="text-[#222222] dark:text-[#EAEAEA] font-bold">
-                총 {totalQuantity.toLocaleString()}장 생성 준비 완료
+              <span className="text-[#222222] dark:text-[#EAEAEA] font-black">
+                {outputMode === "single"
+                  ? `총 ${totalQuantity.toLocaleString()}장 낱장 출력`
+                  : `총 ${impositionConfig.totalSheets.toLocaleString()}장 ${sheetPaper} 인쇄판`}
               </span>
             )}
           </div>

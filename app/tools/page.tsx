@@ -104,6 +104,13 @@ export default function ToolsPage() {
           icon: "design_services",
           id: "PRN-06",
         },
+        {
+          title: "PDF 일련번호 (넘버링)",
+          desc: "티켓, 상품권, 계약서 등 양식에 번호 위치를 지정하여 대량 번호 매김 PDF를 생성합니다.",
+          href: "/tools/pdf-numbering",
+          icon: "pin_drop",
+          id: "PRN-07",
+        },
       ]
     },
     {

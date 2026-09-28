@@ -54,6 +54,10 @@ export default function PdfNumberingPage() {
   const [fontFamily, setFontFamily] = useState<"Helvetica" | "Courier" | "Times">("Courier");
   const [fontColor, setFontColor] = useState<string>("#dc2626");
 
+  // 미세 위치 보정 (Global Offset)
+  const [yOffsetMm, setYOffsetMm] = useState<number>(0);
+  const [xOffsetMm, setXOffsetMm] = useState<number>(0);
+
   // 넘버링 위치 목록
   const [positions, setPositions] = useState<NumberPosition[]>([
     {
@@ -72,7 +76,18 @@ export default function PdfNumberingPage() {
   const [activePosId, setActivePosId] = useState<string>("pos-1");
 
   // 조판 (Cut & Stack) 전용 설정
-  const [sheetPaper, setSheetPaper] = useState<"A4" | "A3">("A4");
+  const [sheetPaper, setSheetPaper] = useState<"A4" | "A3" | "custom">("A4");
+  const [customSheetW, setCustomSheetW] = useState<number>(210);
+  const [customSheetH, setCustomSheetH] = useState<number>(280);
+
+  // 안착 모드: "auto" (자동 계산) vs "manual" (직접 행/열 입력)
+  const [gridMode, setGridMode] = useState<"auto" | "manual">("manual");
+  const [manualCols, setManualCols] = useState<number>(1);
+  const [manualRows, setManualRows] = useState<number>(4);
+
+  // 조판 정렬: "top" (상단 맞춤 0mm - 8.5mm 밀림 방지) vs "center" (중앙 정렬)
+  const [impositionAlign, setImpositionAlign] = useState<"top" | "center">("top");
+
   const [cropMarks, setCropMarks] = useState<boolean>(true);
   const [previewSheetIdx, setPreviewSheetIdx] = useState<number>(0);
 
@@ -100,23 +115,31 @@ export default function PdfNumberingPage() {
 
   const totalQuantity = Math.max(0, Math.floor((endNum - startNum) / (step || 1)) + 1);
 
-  // --- 조판 (Cut & Stack) 규격 및 그리드 자동 연산 ---
+  // --- 조판 (Cut & Stack) 규격 및 그리드 연산 ---
   const sheetDimensions = useMemo(() => {
     if (sheetPaper === "A4") return { wMm: 210, hMm: 297 };
-    return { wMm: 297, hMm: 420 };
-  }, [sheetPaper]);
+    if (sheetPaper === "A3") return { wMm: 297, hMm: 420 };
+    return { wMm: customSheetW || 210, hMm: customSheetH || 297 };
+  }, [sheetPaper, customSheetW, customSheetH]);
 
   const impositionConfig = useMemo(() => {
-    if (!pageWidthMm || !pageHeightMm) return { cols: 2, rows: 5, slotsPerSheet: 10, totalSheets: 100 };
-    
-    // 용지 안에 최대로 안착할 수 있는 열과 행 계산
-    const cols = Math.max(1, Math.floor(sheetDimensions.wMm / pageWidthMm));
-    const rows = Math.max(1, Math.floor(sheetDimensions.hMm / pageHeightMm));
+    if (!pageWidthMm || !pageHeightMm) return { cols: 1, rows: 4, slotsPerSheet: 4, totalSheets: 100 };
+
+    let cols = 1;
+    let rows = 4;
+    if (gridMode === "auto") {
+      cols = Math.max(1, Math.floor(sheetDimensions.wMm / pageWidthMm));
+      rows = Math.max(1, Math.floor(sheetDimensions.hMm / pageHeightMm));
+    } else {
+      cols = Math.max(1, manualCols);
+      rows = Math.max(1, manualRows);
+    }
+
     const slotsPerSheet = cols * rows;
     const totalSheets = Math.ceil(totalQuantity / slotsPerSheet);
 
     return { cols, rows, slotsPerSheet, totalSheets };
-  }, [pageWidthMm, pageHeightMm, sheetDimensions, totalQuantity]);
+  }, [pageWidthMm, pageHeightMm, sheetDimensions, totalQuantity, gridMode, manualCols, manualRows]);
 
   // 화면 컨테이너 폭 실시간 측정
   useEffect(() => {
@@ -256,12 +279,21 @@ export default function PdfNumberingPage() {
         setPageWidthMm(widthMm);
         setPageHeightMm(heightMm);
 
+        // 원고 높이에 맞춰 수동 행 수 자동 추천 (예: 70mm 전후면 4행 추천)
+        if (heightMm <= 76) {
+          setManualCols(1);
+          setManualRows(4);
+        } else if (heightMm <= 105) {
+          setManualCols(1);
+          setManualRows(3);
+        }
+
         const initialPositions: NumberPosition[] = [
           {
             id: "pos-1",
             name: "번호 1",
             xMm: Math.max(5, Math.round(widthMm * 0.65)),
-            yMm: Math.max(5, Math.round(heightMm * 0.6)),
+            yMm: Math.max(5, Math.round(heightMm * 0.2)),
             widthMm: Math.min(widthMm * 0.35, 25),
             heightMm: Math.min(heightMm * 0.25, 8),
             hasBg: false,
@@ -503,7 +535,7 @@ export default function PdfNumberingPage() {
     updateActivePos({ xMm: newXMm, yMm: newYMm });
   };
 
-  // --- PDF 생성 및 다운로드 (단일 매수 출력 or Cut & Stack 인쇄 조판) ---
+  // --- PDF 생성 및 다운로드 ---
   const handleGeneratePdf = async () => {
     if (!fileBuffer || totalQuantity <= 0) return;
 
@@ -532,7 +564,7 @@ export default function PdfNumberingPage() {
       const MM_TO_PT = 2.83465;
 
       if (outputMode === "single") {
-        // [단일 매수 출력]: 1장씩 낱장 PDF 생성
+        // [단일 매수 출력]
         const numbers: number[] = [];
         for (let n = startNum; n <= endNum; n += step) {
           numbers.push(n);
@@ -546,8 +578,11 @@ export default function PdfNumberingPage() {
           page.drawPage(embeddedTemplate, { x: 0, y: 0, width: itemPtW, height: itemPtH });
 
           for (const pos of positions) {
-            const boxXPt = (pos.xMm / pageWidthMm) * itemPtW;
-            const boxYFromTopPt = (pos.yMm / pageHeightMm) * itemPtH;
+            const finalXMm = pos.xMm + xOffsetMm;
+            const finalYMm = pos.yMm + yOffsetMm;
+
+            const boxXPt = (finalXMm / pageWidthMm) * itemPtW;
+            const boxYFromTopPt = (finalYMm / pageHeightMm) * itemPtH;
             const boxWPt = (pos.widthMm / pageWidthMm) * itemPtW;
             const boxHPt = (pos.heightMm / pageHeightMm) * itemPtH;
             const boxYPt = itemPtH - boxYFromTopPt - boxHPt;
@@ -584,16 +619,16 @@ export default function PdfNumberingPage() {
           }
         }
       } else {
-        // [인쇄 조판 (Cut & Stack)]: A4/A3 전지에 10장씩 안착 및 겹침 재단 순서 자동 연산
+        // [인쇄 조판 (Cut & Stack)]
         const sheetPtW = sheetDimensions.wMm * MM_TO_PT;
         const sheetPtH = sheetDimensions.hMm * MM_TO_PT;
         const { cols, rows, totalSheets } = impositionConfig;
 
-        // 용지 중앙 정렬 여백
+        // 용지 정렬 여백 (상단 맞춤: offsetPtY = 0 / 중앙 정렬: offsetPtY = 여백 반분)
         const totalGridWPt = cols * itemPtW;
         const totalGridHPt = rows * itemPtH;
-        const offsetPtX = (sheetPtW - totalGridWPt) / 2;
-        const offsetPtY = (sheetPtH - totalGridHPt) / 2;
+        const offsetPtX = Math.max(0, (sheetPtW - totalGridWPt) / 2);
+        const offsetPtY = impositionAlign === "top" ? 0 : Math.max(0, (sheetPtH - totalGridHPt) / 2);
 
         const markColor = rgb(0.2, 0.2, 0.2);
 
@@ -602,15 +637,12 @@ export default function PdfNumberingPage() {
 
           for (let c = 0; c < cols; c++) {
             for (let r = 0; r < rows; r++) {
-              // Cut & Stack 공식: 1번째 열 아래로 0~4번 슬롯, 2번째 열 아래로 5~9번 슬롯
               const slotIdx = c * rows + r;
               const slotNum = startNum + (slotIdx * totalSheets) + (s * step);
 
-              // 슬롯의 전지 상 위치 (상단 기준)
               const slotXPt = offsetPtX + c * itemPtW;
               const slotYPt = sheetPtH - offsetPtY - (r + 1) * itemPtH;
 
-              // 원본 템플릿 드로우
               page.drawPage(embeddedTemplate, {
                 x: slotXPt,
                 y: slotYPt,
@@ -618,13 +650,15 @@ export default function PdfNumberingPage() {
                 height: itemPtH,
               });
 
-              // 끝 번호를 넘지 않는 경우에만 번호 인쇄
               if (slotNum <= endNum) {
                 const formattedText = formatNumber(slotNum);
 
                 for (const pos of positions) {
-                  const boxXPt = slotXPt + (pos.xMm / pageWidthMm) * itemPtW;
-                  const boxYFromTopPt = (pos.yMm / pageHeightMm) * itemPtH;
+                  const finalXMm = pos.xMm + xOffsetMm;
+                  const finalYMm = pos.yMm + yOffsetMm;
+
+                  const boxXPt = slotXPt + (finalXMm / pageWidthMm) * itemPtW;
+                  const boxYFromTopPt = (finalYMm / pageHeightMm) * itemPtH;
                   const boxWPt = (pos.widthMm / pageWidthMm) * itemPtW;
                   const boxHPt = (pos.heightMm / pageHeightMm) * itemPtH;
                   const boxYPt = (slotYPt + itemPtH) - boxYFromTopPt - boxHPt;
@@ -658,19 +692,16 @@ export default function PdfNumberingPage() {
             }
           }
 
-          // 재단선(Crop Marks) 드로우
           if (cropMarks) {
             const markLen = 5 * MM_TO_PT;
             const drawL = (x1: number, y1: number, x2: number, y2: number) =>
               page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.4, color: markColor });
 
-            // 수직선 재단표시 (상단 / 하단)
             for (let c = 0; c <= cols; c++) {
               const cx = offsetPtX + c * itemPtW;
               drawL(cx, sheetPtH - offsetPtY, cx, sheetPtH - offsetPtY + markLen);
               drawL(cx, offsetPtY, cx, offsetPtY - markLen);
             }
-            // 수평선 재단표시 (좌측 / 우측)
             for (let r = 0; r <= rows; r++) {
               const cy = sheetPtH - offsetPtY - r * itemPtH;
               drawL(offsetPtX, cy, offsetPtX - markLen, cy);
@@ -691,7 +722,9 @@ export default function PdfNumberingPage() {
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       const cleanName = (fileName || "원고").replace(/\.[^/.]+$/, "");
-      const modeSuffix = outputMode === "single" ? `_단일_${formatNumber(startNum)}~${formatNumber(endNum)}` : `_조판_Cut&Stack_${sheetPaper}_${impositionConfig.totalSheets}장`;
+      const modeSuffix = outputMode === "single"
+        ? `_단일_${formatNumber(startNum)}~${formatNumber(endNum)}`
+        : `_조판_Cut&Stack_${sheetPaper}_${impositionConfig.rows}행_${impositionConfig.totalSheets}장`;
       link.download = `${cleanName}${modeSuffix}.pdf`;
       link.click();
     } catch (err) {
@@ -720,7 +753,7 @@ export default function PdfNumberingPage() {
             PDF 일련번호 & 조판 (Cut & Stack)
           </h1>
           <p className="mt-2 text-sm font-bold text-[#666666] dark:text-[#A0A0A0]">
-            마우스로 번호 위치를 잡고, 재단 후 손으로 분류할 필요 없이 바로 포개지는 인쇄용 하리꼬미를 생성합니다.
+            마우스로 번호 위치를 잡고, 커스텀 인쇄 용지 및 강제 4장 안착 등 자유로운 하리꼬미 조판을 지원합니다.
           </p>
         </div>
 
@@ -773,7 +806,7 @@ export default function PdfNumberingPage() {
                   양식 PDF 파일 업로드
                 </p>
                 <p className="text-xs font-bold text-[#A0A0A0] dark:text-[#666666] mt-1">
-                  티켓, 상품권, 쿠폰 등 (단면 1페이지)
+                  티켓, 응모권, 쿠폰 등 (단면 1페이지)
                 </p>
               </div>
             ) : (
@@ -813,18 +846,131 @@ export default function PdfNumberingPage() {
               </div>
 
               <div className="p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                {/* 1. 인쇄 용지 규격 (A4 / A3 / 직접 입력) */}
+                <div>
+                  <label className="block text-[11px] font-bold text-blue-900 dark:text-blue-200 mb-1">
+                    인쇄 용지 규격
+                  </label>
+                  <select
+                    value={sheetPaper}
+                    onChange={(e) => setSheetPaper(e.target.value as any)}
+                    className="w-full bg-white dark:bg-[#121212] border-2 border-blue-200 dark:border-blue-700 px-3 py-2 text-xs font-bold outline-none cursor-pointer"
+                  >
+                    <option value="A4">A4 (210 × 297 mm)</option>
+                    <option value="A3">A3 (297 × 420 mm)</option>
+                    <option value="custom">직접 입력 (커스텀 용지)</option>
+                  </select>
+                </div>
+
+                {/* 커스텀 용지일 때 가로/세로 직접 입력 빈칸 */}
+                {sheetPaper === "custom" && (
+                  <div className="grid grid-cols-2 gap-3 bg-white/80 dark:bg-[#121212]/80 p-2.5 border border-blue-200 dark:border-blue-800">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-0.5">
+                        용지 가로 (mm)
+                      </label>
+                      <input
+                        type="number"
+                        min="50"
+                        value={customSheetW}
+                        onChange={(e) => setCustomSheetW(Number(e.target.value))}
+                        className="w-full bg-[#F5F4F0] dark:bg-[#1A1A1A] border border-blue-300 dark:border-blue-700 px-2 py-1 text-xs font-bold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-0.5">
+                        용지 세로 (mm)
+                      </label>
+                      <input
+                        type="number"
+                        min="50"
+                        value={customSheetH}
+                        onChange={(e) => setCustomSheetH(Number(e.target.value))}
+                        className="w-full bg-[#F5F4F0] dark:bg-[#1A1A1A] border border-blue-300 dark:border-blue-700 px-2 py-1 text-xs font-bold outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. 안착 개수 (자동 계산 vs 수동 강제 지정) */}
+                <div className="space-y-1.5 pt-1 border-t border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-blue-900 dark:text-blue-200">
+                      안착 개수 (배열)
+                    </label>
+                    <div className="flex items-center gap-2 text-xs font-bold">
+                      <button
+                        onClick={() => setGridMode("manual")}
+                        className={`px-2 py-0.5 border ${
+                          gridMode === "manual"
+                            ? "bg-blue-600 text-white border-blue-700 font-black"
+                            : "bg-white text-gray-600 border-gray-300"
+                        }`}
+                      >
+                        직접 지정 (수동)
+                      </button>
+                      <button
+                        onClick={() => setGridMode("auto")}
+                        className={`px-2 py-0.5 border ${
+                          gridMode === "auto"
+                            ? "bg-blue-600 text-white border-blue-700 font-black"
+                            : "bg-white text-gray-600 border-gray-300"
+                        }`}
+                      >
+                        자동 계산
+                      </button>
+                    </div>
+                  </div>
+
+                  {gridMode === "manual" ? (
+                    <div className="grid grid-cols-2 gap-3 bg-white/80 dark:bg-[#121212]/80 p-2.5 border border-blue-200 dark:border-blue-800">
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-0.5">
+                          가로 열 (Cols)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={manualCols}
+                          onChange={(e) => setManualCols(Number(e.target.value))}
+                          className="w-full bg-[#F5F4F0] dark:bg-[#1A1A1A] border border-blue-300 dark:border-blue-700 px-2 py-1 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-0.5">
+                          세로 행 (Rows)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={manualRows}
+                          onChange={(e) => setManualRows(Number(e.target.value))}
+                          className="w-full bg-[#F5F4F0] dark:bg-[#1A1A1A] border border-blue-300 dark:border-blue-700 px-2 py-1 text-xs font-bold outline-none"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-500 font-mono">
+                      자동 연산: {impositionConfig.cols}열 × {impositionConfig.rows}행 ({impositionConfig.slotsPerSheet}개)
+                    </p>
+                  )}
+                </div>
+
+                {/* 3. 조판 정렬 모드 (상단 맞춤 vs 중앙 정렬) */}
+                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-blue-200 dark:border-blue-800">
                   <div>
                     <label className="block text-[11px] font-bold text-blue-900 dark:text-blue-200 mb-1">
-                      인쇄 용지 규격
+                      상단 여백 정렬
                     </label>
                     <select
-                      value={sheetPaper}
-                      onChange={(e) => setSheetPaper(e.target.value as any)}
-                      className="w-full bg-white dark:bg-[#121212] border-2 border-blue-200 dark:border-blue-700 px-3 py-2 text-xs font-bold outline-none cursor-pointer"
+                      value={impositionAlign}
+                      onChange={(e) => setImpositionAlign(e.target.value as any)}
+                      className="w-full bg-white dark:bg-[#121212] border-2 border-blue-200 dark:border-blue-700 px-2 py-1.5 text-xs font-bold outline-none cursor-pointer"
                     >
-                      <option value="A4">A4 (210 × 297 mm)</option>
-                      <option value="A3">A3 (297 × 420 mm)</option>
+                      <option value="top">상단 맞춤 (0mm 여백)</option>
+                      <option value="center">중앙 정렬 (여백 반분)</option>
                     </select>
                   </div>
                   <div>
@@ -833,13 +979,13 @@ export default function PdfNumberingPage() {
                     </label>
                     <button
                       onClick={() => setCropMarks(!cropMarks)}
-                      className={`w-full py-2 text-xs font-bold border-2 transition-colors flex items-center justify-center gap-1.5 ${
+                      className={`w-full py-1.5 text-xs font-bold border-2 transition-colors flex items-center justify-center gap-1 ${
                         cropMarks
                           ? "bg-blue-600 text-white border-blue-700 font-black"
                           : "bg-white text-gray-500 border-blue-200"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">
+                      <span className="material-symbols-outlined text-[15px]">
                         {cropMarks ? "check_circle" : "cancel"}
                       </span>
                       {cropMarks ? "재단선 ON" : "재단선 OFF"}
@@ -847,30 +993,16 @@ export default function PdfNumberingPage() {
                   </div>
                 </div>
 
-                {/* 적층 원리 안내 다이어그램 */}
-                <div className="border border-blue-200 dark:border-blue-800 bg-white/80 dark:bg-[#121212]/80 p-3 space-y-2">
+                {/* 적층 요약 안내 카드 */}
+                <div className="border border-blue-200 dark:border-blue-800 bg-white/90 dark:bg-[#121212]/90 p-3 space-y-1.5">
                   <div className="flex items-center justify-between text-xs font-black text-blue-950 dark:text-blue-100">
-                    <span>1번째 인쇄 장 배열 예시</span>
+                    <span>1번째 인쇄 장 배열</span>
                     <span className="text-blue-600 font-mono">
                       총 {impositionConfig.totalSheets}장 출력
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5 font-mono text-[11px] text-center font-bold">
-                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
-                      1번 (좌상)
-                    </div>
-                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
-                      {1 + impositionConfig.rows * impositionConfig.totalSheets}번 (우상)
-                    </div>
-                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
-                      {1 + 1 * impositionConfig.totalSheets}번
-                    </div>
-                    <div className="bg-blue-50 dark:bg-[#1E293B] border border-blue-200 dark:border-blue-700 py-1">
-                      {1 + (impositionConfig.rows + 1) * impositionConfig.totalSheets}번
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-blue-800 dark:text-blue-300 font-bold leading-tight pt-1">
-                    ✓ 출력된 {impositionConfig.totalSheets}장을 그대로 겹쳐서 재단하면, 수작업 분류 없이 1번부터 {endNum}번까지 순서대로 바로 포개집니다.
+                  <p className="text-[11px] text-blue-800 dark:text-blue-300 font-bold leading-tight">
+                    ✓ 출력된 {impositionConfig.totalSheets}장을 그대로 겹쳐서 재단하면, 1번부터 {endNum}번까지 묶음 순서대로 자동 정렬 완성!
                   </p>
                 </div>
               </div>
@@ -984,6 +1116,42 @@ export default function PdfNumberingPage() {
                         onChange={(e) => updateActivePos({ heightMm: Number(e.target.value) })}
                         className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-3 py-1.5 text-xs font-bold outline-none focus:border-[#222222]"
                       />
+                    </div>
+                  </div>
+
+                  {/* Y축 / X축 미세 보정 (밀림 방지 튜닝) */}
+                  <div className="bg-[#F5F4F0] dark:bg-[#1A1A1A] p-2.5 border border-dashed border-[#CCCCCC] dark:border-[#444444] space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-[#444444] dark:text-[#CCCCCC]">
+                      <span>인쇄 미세 위치 보정 (Offset)</span>
+                      <span className="text-[10px] text-gray-500">인쇄기 핀트 미세 조정</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-0.5">
+                          Y축 보정 (±mm)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={yOffsetMm}
+                          onChange={(e) => setYOffsetMm(Number(e.target.value))}
+                          placeholder="0"
+                          className="w-full bg-white dark:bg-[#121212] border border-[#CCCCCC] dark:border-[#444444] px-2 py-1 text-xs font-bold outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#666666] dark:text-[#A0A0A0] mb-0.5">
+                          X축 보정 (±mm)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={xOffsetMm}
+                          onChange={(e) => setXOffsetMm(Number(e.target.value))}
+                          placeholder="0"
+                          className="w-full bg-white dark:bg-[#121212] border border-[#CCCCCC] dark:border-[#444444] px-2 py-1 text-xs font-bold outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1196,7 +1364,7 @@ export default function PdfNumberingPage() {
                   <p className="text-sm font-black text-blue-900 dark:text-blue-100 mt-0.5">
                     {outputMode === "single"
                       ? `${totalQuantity.toLocaleString()} 장`
-                      : `${sheetPaper} ${impositionConfig.totalSheets.toLocaleString()} 장`}
+                      : `${impositionConfig.totalSheets.toLocaleString()} 장 (${impositionConfig.rows}행 안착)`}
                   </p>
                 </div>
               </div>
@@ -1322,7 +1490,7 @@ export default function PdfNumberingPage() {
                 <span className="text-[11px] font-mono text-[#A0A0A0] bg-[#333333] px-2.5 py-0.5 border border-[#444444]">
                   {outputMode === "single"
                     ? `${pageWidthMm} × ${pageHeightMm} mm`
-                    : `${sheetPaper} (${sheetDimensions.wMm}×${sheetDimensions.hMm}mm) • ${impositionConfig.cols}×${impositionConfig.rows} 안착`}
+                    : `${sheetDimensions.wMm}×${sheetDimensions.hMm}mm • ${impositionConfig.cols}열×${impositionConfig.rows}행 안착 (${impositionAlign === "top" ? "상단맞춤" : "중앙정렬"})`}
                 </span>
               )}
             </div>
@@ -1407,8 +1575,11 @@ export default function PdfNumberingPage() {
 
                   {positions.map((pos) => {
                     const isActive = pos.id === activePosId;
-                    const leftPercent = (pos.xMm / pageWidthMm) * 100;
-                    const topPercent = (pos.yMm / pageHeightMm) * 100;
+                    const finalXMm = pos.xMm + xOffsetMm;
+                    const finalYMm = pos.yMm + yOffsetMm;
+
+                    const leftPercent = (finalXMm / pageWidthMm) * 100;
+                    const topPercent = (finalYMm / pageHeightMm) * 100;
                     const widthPercent = (pos.widthMm / pageWidthMm) * 100;
                     const heightPercent = (pos.heightMm / pageHeightMm) * 100;
                     const renderedFontSizePx = Math.max(6, fontSize * screenScale);
@@ -1482,24 +1653,23 @@ export default function PdfNumberingPage() {
                   })}
                 </div>
               ) : (
-                /* [조판 모드]: 전지(A4/A3) 상에 10장씩 앉혀진 Cut & Stack 실시간 렌더링 뷰어 */
+                /* [조판 모드]: 전지 상에 실제 여백(offset)과 안착 슬롯이 1:1 완벽 동기화된 뷰어 */
                 <div
-                  className="relative shadow-[0_16px_36px_rgba(0,0,0,0.8)] bg-white border border-gray-400 select-none p-4 flex flex-col items-center justify-center"
+                  className="relative shadow-[0_16px_36px_rgba(0,0,0,0.8)] bg-white border border-gray-400 select-none overflow-hidden"
                   style={{
                     height: "100%",
                     maxHeight: "720px",
                     aspectRatio: `${sheetDimensions.wMm} / ${sheetDimensions.hMm}`,
                   }}
                 >
-                  {/* 전지 그리드 컨테이너 */}
-                  <div
-                    className="w-full h-full relative grid border border-dashed border-gray-400"
-                    style={{
-                      gridTemplateColumns: `repeat(${impositionConfig.cols}, minmax(0, 1fr))`,
-                      gridTemplateRows: `repeat(${impositionConfig.rows}, minmax(0, 1fr))`,
-                    }}
-                  >
-                    {Array.from({ length: impositionConfig.slotsPerSheet }).map((_, idx) => {
+                  {/* 실제 전지 여백 연산과 100% 동일한 슬롯 배치 */}
+                  {(() => {
+                    const totalGridWMm = impositionConfig.cols * pageWidthMm;
+                    const totalGridHMm = impositionConfig.rows * pageHeightMm;
+                    const offsetXMm = Math.max(0, (sheetDimensions.wMm - totalGridWMm) / 2);
+                    const offsetYMm = impositionAlign === "top" ? 0 : Math.max(0, (sheetDimensions.hMm - totalGridHMm) / 2);
+
+                    return Array.from({ length: impositionConfig.slotsPerSheet }).map((_, idx) => {
                       const c = Math.floor(idx / impositionConfig.rows);
                       const r = idx % impositionConfig.rows;
                       const slotIdx = c * impositionConfig.rows + r;
@@ -1507,10 +1677,21 @@ export default function PdfNumberingPage() {
                         startNum + slotIdx * impositionConfig.totalSheets + previewSheetIdx * step;
                       const isOver = slotNum > endNum;
 
+                      const slotLeftPercent = ((offsetXMm + c * pageWidthMm) / sheetDimensions.wMm) * 100;
+                      const slotTopPercent = ((offsetYMm + r * pageHeightMm) / sheetDimensions.hMm) * 100;
+                      const slotWidthPercent = (pageWidthMm / sheetDimensions.wMm) * 100;
+                      const slotHeightPercent = (pageHeightMm / sheetDimensions.hMm) * 100;
+
                       return (
                         <div
                           key={idx}
-                          className="relative border border-gray-300 overflow-hidden flex items-center justify-center bg-gray-50"
+                          className="absolute border border-gray-300 overflow-hidden flex items-center justify-center bg-gray-50"
+                          style={{
+                            left: `${slotLeftPercent}%`,
+                            top: `${slotTopPercent}%`,
+                            width: `${slotWidthPercent}%`,
+                            height: `${slotHeightPercent}%`,
+                          }}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -1522,8 +1703,11 @@ export default function PdfNumberingPage() {
                           {/* 슬롯 상의 번호 오버레이 */}
                           {!isOver &&
                             positions.map((pos) => {
-                              const leftPercent = (pos.xMm / pageWidthMm) * 100;
-                              const topPercent = (pos.yMm / pageHeightMm) * 100;
+                              const finalXMm = pos.xMm + xOffsetMm;
+                              const finalYMm = pos.yMm + yOffsetMm;
+
+                              const leftPercent = (finalXMm / pageWidthMm) * 100;
+                              const topPercent = (finalYMm / pageHeightMm) * 100;
                               const widthPercent = (pos.widthMm / pageWidthMm) * 100;
                               const heightPercent = (pos.heightMm / pageHeightMm) * 100;
 
@@ -1561,8 +1745,8 @@ export default function PdfNumberingPage() {
                             })}
                         </div>
                       );
-                    })}
-                  </div>
+                    });
+                  })()}
                 </div>
               )
             ) : (
@@ -1594,7 +1778,7 @@ export default function PdfNumberingPage() {
               <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 font-bold">
                 <span className="material-symbols-outlined text-[16px]">info</span>
                 <span>
-                  출력 후 100장을 겹쳐서 재단하면, 1번부터 1,000번까지 손으로 맞출 필요 없이 완벽하게 자동 정렬됩니다.
+                  출력 후 {impositionConfig.totalSheets}장을 겹쳐서 재단하면, 1번부터 {endNum}번까지 손으로 맞출 필요 없이 완벽하게 자동 정렬됩니다.
                 </span>
               </div>
             )}
@@ -1602,7 +1786,7 @@ export default function PdfNumberingPage() {
               <span className="text-[#222222] dark:text-[#EAEAEA] font-black">
                 {outputMode === "single"
                   ? `총 ${totalQuantity.toLocaleString()}장 낱장 출력`
-                  : `총 ${impositionConfig.totalSheets.toLocaleString()}장 ${sheetPaper} 인쇄판`}
+                  : `총 ${impositionConfig.totalSheets.toLocaleString()}장 전지 인쇄판 (${impositionConfig.cols}×${impositionConfig.rows} 안착)`}
               </span>
             )}
           </div>

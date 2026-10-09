@@ -97,7 +97,9 @@ export default function PdfNumberingPage() {
 
   // 에디터 마우스 인터랙션 상태
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const sheetViewerRef = useRef<HTMLDivElement>(null);
   const [containerWidthPx, setContainerWidthPx] = useState<number>(600);
+  const [sheetContainerWidthPx, setSheetContainerWidthPx] = useState<number>(0);
   const [interactionMode, setInteractionMode] = useState<"idle" | "move" | "resize">("idle");
   const [activeHandle, setActiveHandle] = useState<ResizeHandle | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState<boolean>(false);
@@ -141,21 +143,58 @@ export default function PdfNumberingPage() {
     return { cols, rows, slotsPerSheet, totalSheets };
   }, [pageWidthMm, pageHeightMm, sheetDimensions, totalQuantity, gridMode, manualCols, manualRows]);
 
-  // 화면 컨테이너 폭 실시간 측정
+  // 화면 컨테이너 폭 실시간 측정 (단일 모드 및 조판 모드 모두 실시간 옵저빙)
   useEffect(() => {
-    if (!editorContainerRef.current) return;
     const updateWidth = () => {
       if (editorContainerRef.current) {
         setContainerWidthPx(editorContainerRef.current.clientWidth);
       }
+      if (sheetViewerRef.current) {
+        setSheetContainerWidthPx(sheetViewerRef.current.clientWidth);
+      }
     };
     updateWidth();
     const ro = new ResizeObserver(() => updateWidth());
-    ro.observe(editorContainerRef.current);
+    if (editorContainerRef.current) ro.observe(editorContainerRef.current);
+    if (sheetViewerRef.current) ro.observe(sheetViewerRef.current);
     return () => ro.disconnect();
-  }, [previewImgUrl]);
+  }, [previewImgUrl, outputMode, sheetPaper, customSheetW, customSheetH]);
 
   const screenScale = pageWidthPt > 0 ? containerWidthPx / pageWidthPt : 1;
+
+  const sheetPtW = sheetDimensions.wMm * 2.83465;
+  const effectiveSheetWidthPx =
+    sheetContainerWidthPx > 0
+      ? sheetContainerWidthPx
+      : Math.min(680, 720 * (sheetDimensions.wMm / sheetDimensions.hMm));
+  const sheetScale = sheetPtW > 0 ? effectiveSheetWidthPx / sheetPtW : 0.5;
+
+  const fontStyleConfig = useMemo(() => {
+    switch (fontFamily) {
+      case "Courier":
+        return {
+          fontFamily: "'Courier New', Courier, 'Liberation Mono', monospace",
+          fontWeight: 700,
+          letterSpacing: "0.02em",
+        };
+      case "Helvetica":
+        return {
+          fontFamily: "'Helvetica Neue', Helvetica, Arial, 'Pretendard', sans-serif",
+          fontWeight: 700,
+          letterSpacing: "-0.01em",
+        };
+      case "Times":
+        return {
+          fontFamily: "'Times New Roman', Times, 'Nanum Myeongjo', serif",
+          fontWeight: 700,
+        };
+      default:
+        return {
+          fontFamily: "'Courier New', Courier, monospace",
+          fontWeight: 700,
+        };
+    }
+  }, [fontFamily]);
 
   const formatNumber = (num: number) => {
     let numStr = String(num);
@@ -1353,7 +1392,13 @@ export default function PdfNumberingPage() {
                   <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300">
                     첫 장 번호 미리보기
                   </p>
-                  <p className="text-base font-black text-blue-900 dark:text-blue-100 font-mono mt-0.5">
+                  <p
+                    className="text-base font-bold text-blue-900 dark:text-blue-100 mt-0.5 tracking-wider"
+                    style={{
+                      ...fontStyleConfig,
+                      color: fontColor,
+                    }}
+                  >
                     {formatNumber(startNum)}
                   </p>
                 </div>
@@ -1389,9 +1434,15 @@ export default function PdfNumberingPage() {
                     onChange={(e) => setFontFamily(e.target.value as any)}
                     className="w-full bg-[#F5F4F0] dark:bg-[#121212] border-2 border-[#E5E4E0] dark:border-[#333333] px-2 py-2 text-xs font-bold outline-none cursor-pointer"
                   >
-                    <option value="Courier">Courier (티켓 고정폭)</option>
-                    <option value="Helvetica">Helvetica (고딕)</option>
-                    <option value="Times">Times Roman (명조)</option>
+                    <option value="Courier" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
+                      Courier (티켓 고정폭)
+                    </option>
+                    <option value="Helvetica" style={{ fontFamily: "Arial, sans-serif" }}>
+                      Helvetica (고딕)
+                    </option>
+                    <option value="Times" style={{ fontFamily: "'Times New Roman', serif" }}>
+                      Times Roman (명조)
+                    </option>
                   </select>
                 </div>
                 <div>
@@ -1606,16 +1657,11 @@ export default function PdfNumberingPage() {
                       >
                         <div className="flex items-center justify-center w-full h-full pointer-events-none overflow-hidden px-0.5">
                           <span
-                            className="font-black leading-none whitespace-nowrap"
+                            className="leading-none whitespace-nowrap"
                             style={{
                               fontSize: `${renderedFontSizePx}px`,
                               color: fontColor,
-                              fontFamily:
-                                fontFamily === "Courier"
-                                  ? "monospace"
-                                  : fontFamily === "Times"
-                                  ? "serif"
-                                  : "sans-serif",
+                              ...fontStyleConfig,
                             }}
                           >
                             {formatNumber(startNum)}
@@ -1655,6 +1701,7 @@ export default function PdfNumberingPage() {
               ) : (
                 /* [조판 모드]: 전지 상에 실제 여백(offset)과 안착 슬롯이 1:1 완벽 동기화된 뷰어 */
                 <div
+                  ref={sheetViewerRef}
                   className="relative shadow-[0_16px_36px_rgba(0,0,0,0.8)] bg-white border border-gray-400 select-none overflow-hidden"
                   style={{
                     height: "100%",
@@ -1726,16 +1773,11 @@ export default function PdfNumberingPage() {
                                   }}
                                 >
                                   <span
-                                    className="font-black leading-none whitespace-nowrap"
+                                    className="leading-none whitespace-nowrap"
                                     style={{
-                                      fontSize: `${Math.max(6, fontSize * 0.45)}px`,
+                                      fontSize: `${Math.max(4, Math.round(fontSize * sheetScale * 10) / 10)}px`,
                                       color: fontColor,
-                                      fontFamily:
-                                        fontFamily === "Courier"
-                                          ? "monospace"
-                                          : fontFamily === "Times"
-                                          ? "serif"
-                                          : "sans-serif",
+                                      ...fontStyleConfig,
                                     }}
                                   >
                                     {formatNumber(slotNum)}

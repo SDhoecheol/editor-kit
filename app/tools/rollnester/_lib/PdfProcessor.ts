@@ -1,5 +1,4 @@
-import "server-only";
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument, type PDFEmbeddedPage, rgb } from 'pdf-lib';
 import type { PlacedItem } from './NestingEngine';
 
 const PT_TO_MM = 25.4 / 72;
@@ -22,11 +21,6 @@ export async function parsePdfDimensions(fileBuffer: ArrayBuffer) {
     view[4] !== 0x2d    // -
   ) {
     throw new Error("Invalid file signature: Not a valid PDF.");
-  }
-
-  // 2. 최대 파일 크기 검증 (20MB)
-  if (fileBuffer.byteLength > 20 * 1024 * 1024) {
-    throw new Error("File is too large. Maximum size is 20MB.");
   }
 
   const pdfDoc = await PDFDocument.load(fileBuffer);
@@ -66,18 +60,25 @@ export async function generateNestedPdf(
   
   const page = finalPdf.addPage([canvasWidthPt, canvasHeightPt]);
   
-  // 파일 캐싱 (동일한 파일은 한 번만 로드하여 자원 낭비 방지)
+  // 파일 및 임베드 페이지 캐싱 (동일 파일/페이지는 한 번만 로드/임베드하여 메모리 및 결과 파일 크기 최적화)
   const loadedPdfs: Record<string, PDFDocument> = {};
   for (const [id, buffer] of Object.entries(fileBuffers)) {
     loadedPdfs[id] = await PDFDocument.load(buffer);
   }
 
+  const embeddedPages: Record<string, PDFEmbeddedPage> = {};
+
   for (const item of placedItems) {
     const srcPdf = loadedPdfs[item.fileId];
     if (!srcPdf) continue;
-    
-    // 다중 페이지 PDF인 경우를 대비해, 지정된 인덱스의 페이지를 임베드합니다.
-    const [embeddedPage] = await finalPdf.embedPages([srcPdf.getPages()[item.pageIndex]]);
+
+    const cacheKey = `${item.fileId}_${item.pageIndex}`;
+    let embeddedPage = embeddedPages[cacheKey];
+    if (!embeddedPage) {
+      const [pageToEmbed] = await finalPdf.embedPages([srcPdf.getPages()[item.pageIndex]]);
+      embeddedPage = pageToEmbed;
+      embeddedPages[cacheKey] = embeddedPage;
+    }
     
     // 좌표 변환: pdf-lib의 원점(0,0)은 좌측 하단, NestingEngine의 원점은 좌측 상단입니다.
     const xPt = (item.x + marginMm) * MM_TO_PT;

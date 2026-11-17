@@ -9,20 +9,25 @@ export interface PackItem {
 export interface PlacedItem extends PackItem {
   x: number;
   y: number;
+  rotated?: boolean; // 90도 회전 여부 (true일 경우 width/height는 회전 적용된 치수)
+}
+
+type OrientedItem = PackItem & { rotated: boolean };
+
+function canFit(width: number, maxWidth: number): boolean {
+  return width <= maxWidth + 0.01;
 }
 
 /**
- * 2D Shelf Packing (First Fit Decreasing Height) 알고리즘을 사용합니다.
- * 롤 용지의 특징(세로로 무한정 확장 가능)에 가장 적합한 방식입니다.
+ * 방향이 결정된 아이템 목록에 대해 2D Shelf Packing (FFDH)을 수행합니다.
  */
-export function packItems(
-  items: PackItem[],
+function runShelfPack(
+  orientedItems: OrientedItem[],
   maxWidth: number,
   gutter: number
 ): { placedItems: PlacedItem[]; totalWidth: number; totalHeight: number } {
-  // 높이 기준으로 내림차순 정렬 (높이가 큰 것부터 배치해야 공간 낭비가 적음)
-  const sortedItems = [...items].sort((a, b) => b.height - a.height);
-  
+  const sortedItems = [...orientedItems].sort((a, b) => b.height - a.height || b.width - a.width);
+
   const placedItems: PlacedItem[] = [];
   const shelves: { y: number; height: number; currentWidth: number }[] = [];
   let totalHeight = 0;
@@ -30,13 +35,11 @@ export function packItems(
 
   for (const item of sortedItems) {
     let placed = false;
-    // 여백(Gutter)을 더한 가상의 공간을 차지한다고 계산합니다.
     const itemW = item.width + gutter;
     const itemH = item.height + gutter;
 
-    // 기존에 생성된 선반(Shelf)들 중에서 들어갈 공간이 있는지 찾습니다.
     for (const shelf of shelves) {
-      if (shelf.currentWidth + itemW <= maxWidth + gutter) { // 마지막 여백 허용 위해 + gutter
+      if (shelf.currentWidth + itemW <= maxWidth + gutter + 0.01 && itemH <= shelf.height + 0.01) {
         placedItems.push({
           ...item,
           x: shelf.currentWidth,
@@ -49,7 +52,6 @@ export function packItems(
       }
     }
 
-    // 들어갈 선반이 없다면 새로운 선반을 윗층에 쌓습니다.
     if (!placed) {
       const shelfY = totalHeight;
       placedItems.push({
@@ -67,13 +69,67 @@ export function packItems(
     }
   }
 
-  // 실제 조판된 결과물의 최대 가로/세로 길이를 반환합니다. (마지막 여백 제외)
-  const finalWidth = Math.max(0, maxUsedWidth - gutter);
-  const finalHeight = Math.max(0, totalHeight - gutter);
-
   return {
     placedItems,
-    totalWidth: finalWidth,
-    totalHeight: finalHeight
+    totalWidth: Math.max(0, maxUsedWidth - gutter),
+    totalHeight: Math.max(0, totalHeight - gutter),
   };
+}
+
+/**
+ * 2D Shelf Packing (90도 회전 자동 최적화 포함) 알고리즘
+ * 정방향, 가로 눕히기, 세로 세우기 전략을 비교해 롤 소모 길이(totalHeight)가 가장 짧은 최적 배치를 반환합니다.
+ */
+export function packItems(
+  items: PackItem[],
+  maxWidth: number,
+  gutter: number
+): { placedItems: PlacedItem[]; totalWidth: number; totalHeight: number } {
+  if (items.length === 0) {
+    return { placedItems: [], totalWidth: 0, totalHeight: 0 };
+  }
+
+  const orient = (item: PackItem, preferLandscape: boolean | null): OrientedItem => {
+    const fitsNormal = canFit(item.width, maxWidth);
+    const fitsRotated = canFit(item.height, maxWidth);
+
+    if (preferLandscape === null) {
+      // 원본 우선 (단, 원본이 폭을 넘고 회전 시 들어가면 회전)
+      if (!fitsNormal && fitsRotated) {
+        return { ...item, width: item.height, height: item.width, rotated: true };
+      }
+      return { ...item, rotated: false };
+    }
+
+    const shouldRotate = preferLandscape ? item.width < item.height : item.width > item.height;
+    if (shouldRotate && fitsRotated) {
+      return { ...item, width: item.height, height: item.width, rotated: true };
+    }
+    if (!fitsNormal && fitsRotated) {
+      return { ...item, width: item.height, height: item.width, rotated: true };
+    }
+    return { ...item, rotated: false };
+  };
+
+  // 3가지 방향 전략 시뮬레이션
+  const candidates = [
+    runShelfPack(items.map((i) => orient(i, null)), maxWidth, gutter),  // 1. 원본 유지 우선
+    runShelfPack(items.map((i) => orient(i, true)), maxWidth, gutter),  // 2. 가로로 눕히기 우선 (높이 최소화)
+    runShelfPack(items.map((i) => orient(i, false)), maxWidth, gutter), // 3. 세로로 세우기 우선 (한 줄 개수 최대화)
+  ];
+
+  // 총 길이(totalHeight) 최소 -> 총 폭 최소 -> 회전 수 최소 순으로 최적안 선택
+  candidates.sort((a, b) => {
+    const heightDiff = a.totalHeight - b.totalHeight;
+    if (Math.abs(heightDiff) > 0.1) return heightDiff;
+
+    const widthDiff = a.totalWidth - b.totalWidth;
+    if (Math.abs(widthDiff) > 0.1) return widthDiff;
+
+    const rotA = a.placedItems.filter((p) => p.rotated).length;
+    const rotB = b.placedItems.filter((p) => p.rotated).length;
+    return rotA - rotB;
+  });
+
+  return candidates[0];
 }

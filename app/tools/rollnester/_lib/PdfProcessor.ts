@@ -1,4 +1,4 @@
-import { PDFDocument, type PDFEmbeddedPage, rgb } from 'pdf-lib';
+import { PDFDocument, type PDFEmbeddedPage, rgb, degrees } from 'pdf-lib';
 import type { PlacedItem } from './NestingEngine';
 
 const PT_TO_MM = 25.4 / 72;
@@ -86,12 +86,23 @@ export async function generateNestedPdf(
     const wPt = item.width * MM_TO_PT;
     const hPt = item.height * MM_TO_PT;
     
-    page.drawPage(embeddedPage, {
-      x: xPt,
-      y: yPt,
-      width: wPt,
-      height: hPt,
-    });
+    if (item.rotated) {
+      // 반시계 90도 회전 시 기준점(x, y)이 우하단으로 이동하므로 xPt + wPt에서 그려서 [xPt, xPt+wPt] x [yPt, yPt+hPt] 영역을 정확히 채움
+      page.drawPage(embeddedPage, {
+        x: xPt + wPt,
+        y: yPt,
+        width: hPt,
+        height: wPt,
+        rotate: degrees(90),
+      });
+    } else {
+      page.drawPage(embeddedPage, {
+        x: xPt,
+        y: yPt,
+        width: wPt,
+        height: hPt,
+      });
+    }
     
     // 마크 옵션에 따른 재단 가이드선 그리기
     if (markOption === 'corner') {
